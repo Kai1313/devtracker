@@ -40,6 +40,11 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to access database handle")
 	}
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close database connection")
+		}
+	}()
 
 	userRepository := usermodule.NewRepository(db)
 	userService := usermodule.NewService(userRepository)
@@ -63,7 +68,7 @@ func main() {
 
 	api := app.Group(cfg.App.BasePath)
 	api.Get("/health", func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
 		defer cancel()
 
 		if err := sqlDB.PingContext(ctx); err != nil {
@@ -76,7 +81,7 @@ func main() {
 		})
 	})
 
-	authMiddleware := appmiddleware.JWTAuth(cfg.JWT)
+	authMiddleware := appmiddleware.JWTAuth(cfg.JWT, userRepository)
 	adminOnly := appmiddleware.RequireRoles("admin")
 
 	auth.RegisterRoutes(api, authHandler, authMiddleware)

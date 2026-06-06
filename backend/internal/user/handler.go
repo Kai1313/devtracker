@@ -36,7 +36,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		query.IsActive = &parsed
 	}
 
-	result, meta, err := h.service.List(c.Context(), query)
+	result, meta, err := h.service.List(c.UserContext(), query)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 		return err
 	}
 
-	result, err := h.service.Get(c.Context(), id)
+	result, err := h.service.Get(c.UserContext(), id)
 	if err != nil {
 		return err
 	}
@@ -61,14 +61,14 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 func (h *Handler) Create(c *fiber.Ctx) error {
 	var req CreateUserRequest
 	if err := c.BodyParser(&req); err != nil {
-		return err
+		return apperrors.BadRequest("invalid request body")
 	}
 
 	if err := appvalidator.Struct(req); err != nil {
 		return err
 	}
 
-	result, err := h.service.Create(c.Context(), req)
+	result, err := h.service.Create(c.UserContext(), req)
 	if err != nil {
 		return err
 	}
@@ -84,14 +84,14 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 
 	var req UpdateUserRequest
 	if err := c.BodyParser(&req); err != nil {
-		return err
+		return apperrors.BadRequest("invalid request body")
 	}
 
 	if err := appvalidator.Struct(req); err != nil {
 		return err
 	}
 
-	result, err := h.service.Update(c.Context(), id, req)
+	result, err := h.service.Update(c.UserContext(), id, req)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := h.service.Delete(c.Context(), id); err != nil {
+	if err := h.service.Delete(c.UserContext(), id); err != nil {
 		return err
 	}
 

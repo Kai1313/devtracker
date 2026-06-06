@@ -66,7 +66,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 }
 
 func (s *Service) BootstrapAdmin(ctx context.Context, req BootstrapAdminRequest) (*user.UserResponse, error) {
-	count, err := s.users.Count(ctx)
+	count, err := s.users.CountAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -85,11 +85,21 @@ func (s *Service) BootstrapAdmin(ctx context.Context, req BootstrapAdminRequest)
 		return nil, err
 	}
 
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, apperrors.BadRequest("name cannot be empty")
+	}
+
+	email := normalizeEmail(req.Email)
+	if email == "" {
+		return nil, apperrors.BadRequest("email cannot be empty")
+	}
+
 	account := &user.User{
 		ID:           uuid.New(),
 		RoleID:       role.ID,
-		Name:         strings.TrimSpace(req.Name),
-		Email:        normalizeEmail(req.Email),
+		Name:         name,
+		Email:        email,
 		PasswordHash: passwordHash,
 		IsActive:     true,
 	}

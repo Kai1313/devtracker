@@ -1,16 +1,20 @@
 package middleware
 
 import (
+	"errors"
 	"strings"
 
 	"devtracker/backend/internal/auth"
 	"devtracker/backend/internal/config"
+	"devtracker/backend/internal/user"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-func JWTAuth(cfg config.JWTConfig) fiber.Handler {
+func JWTAuth(cfg config.JWTConfig, users user.Repository) fiber.Handler {
 	tokenManager := auth.NewTokenManager(cfg)
 
 	return func(c *fiber.Ctx) error {
@@ -24,10 +28,28 @@ func JWTAuth(cfg config.JWTConfig) fiber.Handler {
 			return auth.TokenFromError(err)
 		}
 
-		c.Locals(auth.LocalUserID, claims.UserID)
-		c.Locals(auth.LocalEmail, claims.Email)
-		c.Locals(auth.LocalName, claims.Name)
-		c.Locals(auth.LocalRole, claims.Role)
+		userID, err := uuid.Parse(claims.UserID)
+		if err != nil {
+			return apperrors.Unauthorized("invalid token claims")
+		}
+
+		account, err := users.FindByID(c.UserContext(), userID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperrors.Unauthorized("user no longer exists")
+			}
+
+			return err
+		}
+
+		if !account.IsActive {
+			return apperrors.Forbidden("user account is inactive")
+		}
+
+		c.Locals(auth.LocalUserID, account.ID.String())
+		c.Locals(auth.LocalEmail, account.Email)
+		c.Locals(auth.LocalName, account.Name)
+		c.Locals(auth.LocalRole, account.Role.Name)
 
 		return c.Next()
 	}

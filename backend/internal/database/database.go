@@ -31,6 +31,10 @@ func Connect(cfg config.DatabaseConfig, log zerolog.Logger) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
+	if err := sqlDB.Ping(); err != nil {
+		return nil, err
+	}
+
 	return db, nil
 }
 

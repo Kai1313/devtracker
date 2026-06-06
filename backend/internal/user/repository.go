@@ -10,9 +10,11 @@ import (
 
 type Repository interface {
 	Count(ctx context.Context) (int64, error)
+	CountAll(ctx context.Context) (int64, error)
 	Create(ctx context.Context, user *User) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByEmail(ctx context.Context, email string) (*User, error)
+	FindByEmailIncludingDeleted(ctx context.Context, email string) (*User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
 	FindRoleByID(ctx context.Context, id uuid.UUID) (*Role, error)
 	FindRoleByName(ctx context.Context, name string) (*Role, error)
@@ -31,6 +33,12 @@ func NewRepository(db *gorm.DB) Repository {
 func (r *repository) Count(ctx context.Context) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&User{}).Count(&count).Error
+	return count, err
+}
+
+func (r *repository) CountAll(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Unscoped().Model(&User{}).Count(&count).Error
 	return count, err
 }
 
@@ -59,6 +67,17 @@ func (r *repository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) 
 func (r *repository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 	err := r.db.WithContext(ctx).
+		Preload("Role").
+		First(&user, "LOWER(email) = ?", strings.ToLower(email)).
+		Error
+
+	return &user, err
+}
+
+func (r *repository) FindByEmailIncludingDeleted(ctx context.Context, email string) (*User, error) {
+	var user User
+	err := r.db.WithContext(ctx).
+		Unscoped().
 		Preload("Role").
 		First(&user, "LOWER(email) = ?", strings.ToLower(email)).
 		Error

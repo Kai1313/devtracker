@@ -1,6 +1,7 @@
 package auth
 
 import (
+	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
 	appvalidator "devtracker/backend/pkg/validator"
 
@@ -19,14 +20,14 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
-		return err
+		return apperrors.BadRequest("invalid request body")
 	}
 
 	if err := appvalidator.Struct(req); err != nil {
 		return err
 	}
 
-	result, err := h.service.Login(c.Context(), req)
+	result, err := h.service.Login(c.UserContext(), req)
 	if err != nil {
 		return err
 	}
@@ -41,14 +42,14 @@ func (h *Handler) Logout(c *fiber.Ctx) error {
 func (h *Handler) BootstrapAdmin(c *fiber.Ctx) error {
 	var req BootstrapAdminRequest
 	if err := c.BodyParser(&req); err != nil {
-		return err
+		return apperrors.BadRequest("invalid request body")
 	}
 
 	if err := appvalidator.Struct(req); err != nil {
 		return err
 	}
 
-	result, err := h.service.BootstrapAdmin(c.Context(), req)
+	result, err := h.service.BootstrapAdmin(c.UserContext(), req)
 	if err != nil {
 		return err
 	}
@@ -57,15 +58,29 @@ func (h *Handler) BootstrapAdmin(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Me(c *fiber.Ctx) error {
-	userID, err := uuid.Parse(c.Locals(LocalUserID).(string))
+	userID, err := currentUserID(c)
 	if err != nil {
 		return err
 	}
 
-	result, err := h.service.Me(c.Context(), userID)
+	result, err := h.service.Me(c.UserContext(), userID)
 	if err != nil {
 		return err
 	}
 
 	return response.OK(c, "current user retrieved", result)
+}
+
+func currentUserID(c *fiber.Ctx) (uuid.UUID, error) {
+	raw, ok := c.Locals(LocalUserID).(string)
+	if !ok || raw == "" {
+		return uuid.Nil, apperrors.Unauthorized("authenticated user is missing")
+	}
+
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, apperrors.Unauthorized("authenticated user is invalid")
+	}
+
+	return id, nil
 }

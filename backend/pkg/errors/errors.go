@@ -6,13 +6,15 @@ import (
 )
 
 const (
-	CodeBadRequest   = "bad_request"
-	CodeUnauthorized = "unauthorized"
-	CodeForbidden    = "forbidden"
-	CodeNotFound     = "not_found"
-	CodeConflict     = "conflict"
-	CodeValidation   = "validation_error"
-	CodeInternal     = "internal_error"
+	CodeBadRequest       = "bad_request"
+	CodeUnauthorized     = "unauthorized"
+	CodeForbidden        = "forbidden"
+	CodeNotFound         = "not_found"
+	CodeMethodNotAllowed = "method_not_allowed"
+	CodeConflict         = "conflict"
+	CodeValidation       = "validation_error"
+	CodeTooManyRequests  = "too_many_requests"
+	CodeInternal         = "internal_error"
 )
 
 type AppError struct {

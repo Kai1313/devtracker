@@ -60,7 +60,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*UserResponse, error) 
 }
 
 func (s *Service) Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error) {
-	roleID, err := uuid.Parse(req.RoleID)
+	roleID, err := uuid.Parse(strings.TrimSpace(req.RoleID))
 	if err != nil {
 		return nil, apperrors.BadRequest("role_id must be a valid UUID")
 	}
@@ -74,7 +74,16 @@ func (s *Service) Create(ctx context.Context, req CreateUserRequest) (*UserRespo
 		return nil, err
 	}
 
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, apperrors.BadRequest("name cannot be empty")
+	}
+
 	email := normalizeEmail(req.Email)
+	if email == "" {
+		return nil, apperrors.BadRequest("email cannot be empty")
+	}
+
 	if err := s.ensureEmailAvailable(ctx, email, uuid.Nil); err != nil {
 		return nil, err
 	}
@@ -93,7 +102,7 @@ func (s *Service) Create(ctx context.Context, req CreateUserRequest) (*UserRespo
 		ID:           uuid.New(),
 		RoleID:       role.ID,
 		Role:         *role,
-		Name:         strings.TrimSpace(req.Name),
+		Name:         name,
 		Email:        email,
 		PasswordHash: passwordHash,
 		Team:         strings.TrimSpace(req.Team),
@@ -120,7 +129,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateUserReques
 	}
 
 	if req.RoleID != nil {
-		roleID, err := uuid.Parse(*req.RoleID)
+		roleID, err := uuid.Parse(strings.TrimSpace(*req.RoleID))
 		if err != nil {
 			return nil, apperrors.BadRequest("role_id must be a valid UUID")
 		}
@@ -139,11 +148,20 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateUserReques
 	}
 
 	if req.Name != nil {
-		account.Name = strings.TrimSpace(*req.Name)
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, apperrors.BadRequest("name cannot be empty")
+		}
+
+		account.Name = name
 	}
 
 	if req.Email != nil {
 		email := normalizeEmail(*req.Email)
+		if email == "" {
+			return nil, apperrors.BadRequest("email cannot be empty")
+		}
+
 		if err := s.ensureEmailAvailable(ctx, email, account.ID); err != nil {
 			return nil, err
 		}
@@ -189,7 +207,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Service) ensureEmailAvailable(ctx context.Context, email string, currentID uuid.UUID) error {
-	existing, err := s.repository.FindByEmail(ctx, email)
+	existing, err := s.repository.FindByEmailIncludingDeleted(ctx, email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil

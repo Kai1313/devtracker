@@ -1,6 +1,7 @@
 package response
 
 import (
+	"errors"
 	"net/http"
 
 	apperrors "devtracker/backend/pkg/errors"
@@ -56,9 +57,35 @@ func Error(c *fiber.Ctx, err error) error {
 }
 
 func ErrorHandler(c *fiber.Ctx, err error) error {
-	if fiberErr, ok := err.(*fiber.Error); ok {
-		return Error(c, apperrors.New(fiberErr.Code, apperrors.CodeBadRequest, fiberErr.Message, nil))
+	var fiberErr *fiber.Error
+	if errors.As(err, &fiberErr) {
+		return Error(c, apperrors.New(fiberErr.Code, codeForStatus(fiberErr.Code), fiberErr.Message, nil))
 	}
 
 	return Error(c, err)
+}
+
+func codeForStatus(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return apperrors.CodeBadRequest
+	case http.StatusUnauthorized:
+		return apperrors.CodeUnauthorized
+	case http.StatusForbidden:
+		return apperrors.CodeForbidden
+	case http.StatusNotFound:
+		return apperrors.CodeNotFound
+	case http.StatusMethodNotAllowed:
+		return apperrors.CodeMethodNotAllowed
+	case http.StatusConflict:
+		return apperrors.CodeConflict
+	case http.StatusTooManyRequests:
+		return apperrors.CodeTooManyRequests
+	default:
+		if status >= http.StatusInternalServerError {
+			return apperrors.CodeInternal
+		}
+
+		return apperrors.CodeBadRequest
+	}
 }
