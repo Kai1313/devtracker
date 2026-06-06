@@ -13,6 +13,7 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Task, error)
 	List(ctx context.Context, filter ListTasksQuery) ([]Task, int64, error)
+	ListHistories(ctx context.Context, taskID uuid.UUID) ([]TaskHistory, error)
 	Update(ctx context.Context, task *Task, history *TaskHistory) error
 }
 
@@ -112,6 +113,17 @@ func (r *repository) List(ctx context.Context, filter ListTasksQuery) ([]Task, i
 		Error
 
 	return tasks, total, err
+}
+
+func (r *repository) ListHistories(ctx context.Context, taskID uuid.UUID) ([]TaskHistory, error) {
+	var histories []TaskHistory
+	err := r.db.WithContext(ctx).
+		Where("task_id = ?", taskID).
+		Order("changed_at DESC").
+		Find(&histories).
+		Error
+
+	return histories, err
 }
 
 func withTaskPreloads(query *gorm.DB) *gorm.DB {

@@ -6,6 +6,7 @@ func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.
 	group := router.Group("/tasks", authMiddleware)
 
 	group.Get("/", handler.List)
+	group.Get("/:id/histories", handler.ListHistories)
 	group.Get("/:id", handler.Get)
 	group.Post("/", handler.Create)
 	group.Patch("/:id", handler.Update)

@@ -51,6 +51,20 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 	return response.OK(c, "task retrieved", result)
 }
 
+func (h *Handler) ListHistories(c *fiber.Ctx) error {
+	id, err := parseID(c)
+	if err != nil {
+		return err
+	}
+
+	result, err := h.service.ListHistories(c.UserContext(), id)
+	if err != nil {
+		return err
+	}
+
+	return response.OK(c, "task histories retrieved", result)
+}
+
 func (h *Handler) Create(c *fiber.Ctx) error {
 	actorID, err := currentUserID(c)
 	if err != nil {

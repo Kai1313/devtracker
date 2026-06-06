@@ -26,6 +26,7 @@ type CreateTaskRequest struct {
 	DueDate         string   `json:"due_date" validate:"omitempty"`
 	CompletedDate   string   `json:"completed_date" validate:"omitempty"`
 	QACheckedDate   string   `json:"qa_checked_date" validate:"omitempty"`
+	Note            string   `json:"note" validate:"omitempty"`
 }
 
 type UpdateTaskRequest struct {
@@ -43,6 +44,7 @@ type UpdateTaskRequest struct {
 	DueDate         *string  `json:"due_date" validate:"omitempty"`
 	CompletedDate   *string  `json:"completed_date" validate:"omitempty"`
 	QACheckedDate   *string  `json:"qa_checked_date" validate:"omitempty"`
+	Note            *string  `json:"note" validate:"omitempty"`
 }
 
 type ListTasksQuery struct {
@@ -79,6 +81,16 @@ type TaskResponse struct {
 	UpdatedAt       time.Time                 `json:"updated_at"`
 }
 
+type TaskHistoryResponse struct {
+	ID          uuid.UUID  `json:"id"`
+	TaskID      uuid.UUID  `json:"task_id"`
+	OldStatusID *uuid.UUID `json:"old_status_id"`
+	NewStatusID uuid.UUID  `json:"new_status_id"`
+	ChangedBy   uuid.UUID  `json:"changed_by"`
+	ChangedAt   time.Time  `json:"changed_at"`
+	Note        string     `json:"note,omitempty"`
+}
+
 func NewResponse(model Task) TaskResponse {
 	return TaskResponse{
 		ID:              model.ID,
@@ -109,6 +121,27 @@ func NewResponses(models []Task) []TaskResponse {
 	result := make([]TaskResponse, 0, len(models))
 	for _, model := range models {
 		result = append(result, NewResponse(model))
+	}
+
+	return result
+}
+
+func NewHistoryResponse(model TaskHistory) TaskHistoryResponse {
+	return TaskHistoryResponse{
+		ID:          model.ID,
+		TaskID:      model.TaskID,
+		OldStatusID: model.OldStatusID,
+		NewStatusID: model.NewStatusID,
+		ChangedBy:   model.ChangedBy,
+		ChangedAt:   model.ChangedAt,
+		Note:        model.Note,
+	}
+}
+
+func NewHistoryResponses(models []TaskHistory) []TaskHistoryResponse {
+	result := make([]TaskHistoryResponse, 0, len(models))
+	for _, model := range models {
+		result = append(result, NewHistoryResponse(model))
 	}
 
 	return result

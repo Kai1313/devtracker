@@ -85,6 +85,19 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*TaskResponse, error) 
 	return &response, nil
 }
 
+func (s *Service) ListHistories(ctx context.Context, taskID uuid.UUID) ([]TaskHistoryResponse, error) {
+	if _, err := s.Get(ctx, taskID); err != nil {
+		return nil, err
+	}
+
+	histories, err := s.repository.ListHistories(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewHistoryResponses(histories), nil
+}
+
 func (s *Service) Create(ctx context.Context, req CreateTaskRequest, actorID uuid.UUID) (*TaskResponse, error) {
 	refs, err := s.resolveReferences(ctx, referenceInput{
 		developerID: req.DeveloperID,
@@ -130,7 +143,7 @@ func (s *Service) Create(ctx context.Context, req CreateTaskRequest, actorID uui
 		return nil, err
 	}
 
-	applyStatusDates(refs.status, &completedDate, &qaCheckedDate)
+	applyStatusChangeDates(refs.status, &completedDate, &qaCheckedDate)
 
 	task := &Task{
 		ID:              uuid.New(),
@@ -156,7 +169,7 @@ func (s *Service) Create(ctx context.Context, req CreateTaskRequest, actorID uui
 		UpdatedBy:       &actorID,
 	}
 
-	history := newStatusHistory(task.ID, nil, task.StatusID, actorID)
+	history := newStatusHistory(task.ID, nil, task.StatusID, actorID, req.Note)
 	if err := s.repository.Create(ctx, task, history); err != nil {
 		return nil, err
 	}
@@ -295,12 +308,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateTaskReques
 		current.QACheckedDate = qaCheckedDate
 	}
 
-	applyStatusDates(&current.Status, &current.CompletedDate, &current.QACheckedDate)
 	current.UpdatedBy = &actorID
 
 	var history *TaskHistory
 	if oldStatusID != current.StatusID {
-		history = newStatusHistory(current.ID, &oldStatusID, current.StatusID, actorID)
+		applyStatusChangeDates(&current.Status, &current.CompletedDate, &current.QACheckedDate)
+
+		note := ""
+		if req.Note != nil {
+			note = *req.Note
+		}
+
+		history = newStatusHistory(current.ID, &oldStatusID, current.StatusID, actorID, note)
 	}
 
 	if err := s.repository.Update(ctx, current, history); err != nil {
@@ -436,7 +455,7 @@ func (s *Service) resolveStatus(ctx context.Context, value string) (*status.Task
 	return taskStatus, nil
 }
 
-func newStatusHistory(taskID uuid.UUID, oldStatusID *uuid.UUID, newStatusID uuid.UUID, actorID uuid.UUID) *TaskHistory {
+func newStatusHistory(taskID uuid.UUID, oldStatusID *uuid.UUID, newStatusID uuid.UUID, actorID uuid.UUID, note string) *TaskHistory {
 	return &TaskHistory{
 		ID:          uuid.New(),
 		TaskID:      taskID,
@@ -444,6 +463,7 @@ func newStatusHistory(taskID uuid.UUID, oldStatusID *uuid.UUID, newStatusID uuid
 		NewStatusID: newStatusID,
 		ChangedBy:   actorID,
 		ChangedAt:   time.Now().UTC(),
+		Note:        normalizeText(note),
 	}
 }
 
@@ -553,14 +573,16 @@ func validateDateRange(startDate *time.Time, dueDate *time.Time) error {
 	return nil
 }
 
-func applyStatusDates(taskStatus *status.TaskStatus, completedDate **time.Time, qaCheckedDate **time.Time) {
+func applyStatusChangeDates(taskStatus *status.TaskStatus, completedDate **time.Time, qaCheckedDate **time.Time) {
 	now := time.Now().UTC()
 
-	if taskStatus.IsDone && *completedDate == nil {
+	statusName := strings.ToLower(strings.TrimSpace(taskStatus.StatusName))
+
+	if (taskStatus.IsDone || statusName == "done") && *completedDate == nil {
 		*completedDate = &now
 	}
 
-	if taskStatus.IsQAStatus && *qaCheckedDate == nil {
+	if statusName == "checked by qa" && *qaCheckedDate == nil {
 		*qaCheckedDate = &now
 	}
 }
