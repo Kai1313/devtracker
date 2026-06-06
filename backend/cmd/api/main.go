@@ -11,6 +11,7 @@ import (
 	"devtracker/backend/internal/config"
 	dashboardmodule "devtracker/backend/internal/dashboard"
 	"devtracker/backend/internal/database"
+	kpimodule "devtracker/backend/internal/kpi"
 	appmiddleware "devtracker/backend/internal/middleware"
 	projectmodule "devtracker/backend/internal/project"
 	sprintmodule "devtracker/backend/internal/sprint"
@@ -57,6 +58,7 @@ func main() {
 	statusRepository := statusmodule.NewRepository(db)
 	taskRepository := taskmodule.NewRepository(db)
 	dashboardRepository := dashboardmodule.NewRepository(db)
+	kpiRepository := kpimodule.NewRepository(db)
 
 	userService := usermodule.NewService(userRepository)
 	projectService := projectmodule.NewService(projectRepository)
@@ -64,6 +66,7 @@ func main() {
 	statusService := statusmodule.NewService(statusRepository)
 	taskService := taskmodule.NewService(taskRepository, userRepository, projectRepository, sprintRepository, statusRepository)
 	dashboardService := dashboardmodule.NewService(dashboardRepository, sprintRepository)
+	kpiService := kpimodule.NewService(kpiRepository, sprintRepository)
 	authService := auth.NewService(userRepository, cfg.JWT)
 
 	authHandler := auth.NewHandler(authService)
@@ -73,6 +76,7 @@ func main() {
 	statusHandler := statusmodule.NewHandler(statusService)
 	taskHandler := taskmodule.NewHandler(taskService)
 	dashboardHandler := dashboardmodule.NewHandler(dashboardService)
+	kpiHandler := kpimodule.NewHandler(kpiService)
 
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.App.Name,
@@ -112,6 +116,7 @@ func main() {
 	statusmodule.RegisterRoutes(api, statusHandler, authMiddleware)
 	taskmodule.RegisterRoutes(api, taskHandler, authMiddleware)
 	dashboardmodule.RegisterRoutes(api, dashboardHandler, authMiddleware)
+	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware)
 
 	serverErr := make(chan error, 1)
 	go func() {
