@@ -49,11 +49,13 @@ CREATE TABLE sprints (
 
 CREATE TABLE task_statuses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL UNIQUE,
-    color VARCHAR(30) NOT NULL,
+    status_name VARCHAR(100) NOT NULL UNIQUE,
+    color_name VARCHAR(30) NOT NULL,
+    color_hex VARCHAR(7) NOT NULL,
     status_order INT NOT NULL DEFAULT 0,
     is_done BOOLEAN NOT NULL DEFAULT FALSE,
     is_qa_status BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -130,6 +132,7 @@ CREATE TABLE kpi_snapshots (
 );
 
 CREATE INDEX idx_users_role_id ON users(role_id);
+CREATE INDEX idx_task_statuses_is_active ON task_statuses(is_active);
 CREATE INDEX idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX idx_tasks_sprint_id ON tasks(sprint_id);
 CREATE INDEX idx_tasks_developer_id ON tasks(developer_id);
@@ -144,10 +147,10 @@ INSERT INTO roles (name, description) VALUES
 ('qa', 'Quality assurance'),
 ('management', 'Management viewer');
 
-INSERT INTO task_statuses (name, color, status_order, is_done, is_qa_status) VALUES
-('Todo', 'gray', 1, false, false),
-('In Progress', 'yellow', 2, false, false),
-('Ready to Check', 'blue', 3, false, true),
-('Checked by QA', 'orange', 4, false, true),
-('Done', 'green', 5, true, false),
-('Blocked', 'red', 6, false, false);
+INSERT INTO task_statuses (status_name, color_name, color_hex, status_order, is_done, is_qa_status, is_active) VALUES
+('Todo', 'gray', '#6B7280', 1, false, false, true),
+('In Progress', 'yellow', '#F59E0B', 2, false, false, true),
+('Ready to Check', 'blue', '#3B82F6', 3, false, true, true),
+('Checked by QA', 'orange', '#F97316', 4, false, true, true),
+('Done', 'green', '#22C55E', 5, true, false, true),
+('Blocked', 'red', '#EF4444', 6, false, false, true);
