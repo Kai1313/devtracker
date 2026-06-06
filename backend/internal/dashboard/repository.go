@@ -45,9 +45,16 @@ func (r *repository) Summary(ctx context.Context, sprintID *uuid.UUID) (*Summary
 		return nil, err
 	}
 
-	if result.TotalTasks > 0 {
-		result.CompletionRate = (float64(result.DoneTasks) / float64(result.TotalTasks)) * 100
-	}
+	applyCompletionRate(&result)
 
 	return &result, nil
+}
+
+func applyCompletionRate(result *SummaryResponse) {
+	if result.TotalTasks == 0 {
+		result.CompletionRate = 0
+		return
+	}
+
+	result.CompletionRate = (float64(result.DoneTasks) / float64(result.TotalTasks)) * 100
 }
