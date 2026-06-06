@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: Load Developer Sheets API
+  version: 1.0.0
+  description: REST API for sprint developer task tracking and KPI foundation.
+servers:
+  - url: http://localhost:8080/api
+paths:
+  /auth/login:
+    post:
+      summary: Login user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login success
+
+  /auth/logout:
+    post:
+      summary: Logout user
+      tags: [Auth]
+      responses:
+        '200':
+          description: Logout success
+
+  /users:
+    get:
+      summary: List users
+      tags: [Users]
+      responses:
+        '200':
+          description: User list
+    post:
+      summary: Create user
+      tags: [Users]
+      responses:
+        '201':
+          description: User created
+
+  /projects:
+    get:
+      summary: List projects
+      tags: [Projects]
+      responses:
+        '200':
+          description: Project list
+    post:
+      summary: Create project
+      tags: [Projects]
+      responses:
+        '201':
+          description: Project created
+
+  /sprints:
+    get:
+      summary: List sprints
+      tags: [Sprints]
+      parameters:
+        - name: project_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sprint list
+    post:
+      summary: Create sprint
+      tags: [Sprints]
+      responses:
+        '201':
+          description: Sprint created
+
+  /statuses:
+    get:
+      summary: List task statuses
+      tags: [Statuses]
+      responses:
+        '200':
+          description: Status list
+    post:
+      summary: Create task status
+      tags: [Statuses]
+      responses:
+        '201':
+          description: Status created
+
+  /tasks:
+    get:
+      summary: List tasks
+      tags: [Tasks]
+      parameters:
+        - name: project_id
+          in: query
+          schema:
+            type: string
+        - name: sprint_id
+          in: query
+          schema:
+            type: string
+        - name: developer_id
+          in: query
+          schema:
+            type: string
+        - name: status_id
+          in: query
+          schema:
+            type: string
+        - name: ticket_number
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task list
+    post:
+      summary: Create task
+      tags: [Tasks]
+      responses:
+        '201':
+          description: Task created
+
+  /tasks/{id}:
+    get:
+      summary: Get task detail
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task detail
+    patch:
+      summary: Update task
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task updated
+    delete:
+      summary: Delete task
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task deleted
+
+  /tasks/{id}/status:
+    patch:
+      summary: Update task status and create task history
+      tags: [Tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status_id]
+              properties:
+                status_id:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Task status updated
+
+  /kpi/sprints/{sprint_id}:
+    get:
+      summary: Get sprint KPI summary
+      tags: [KPI]
+      parameters:
+        - name: sprint_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sprint KPI summary
+
+  /kpi/developers/{developer_id}:
+    get:
+      summary: Get developer KPI summary
+      tags: [KPI]
+      parameters:
+        - name: developer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Developer KPI summary
