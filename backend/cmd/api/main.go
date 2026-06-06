@@ -12,6 +12,7 @@ import (
 	"devtracker/backend/internal/database"
 	appmiddleware "devtracker/backend/internal/middleware"
 	projectmodule "devtracker/backend/internal/project"
+	sprintmodule "devtracker/backend/internal/sprint"
 	usermodule "devtracker/backend/internal/user"
 	"devtracker/backend/pkg/response"
 
@@ -49,14 +50,17 @@ func main() {
 
 	userRepository := usermodule.NewRepository(db)
 	projectRepository := projectmodule.NewRepository(db)
+	sprintRepository := sprintmodule.NewRepository(db)
 
 	userService := usermodule.NewService(userRepository)
 	projectService := projectmodule.NewService(projectRepository)
+	sprintService := sprintmodule.NewService(sprintRepository, projectRepository)
 	authService := auth.NewService(userRepository, cfg.JWT)
 
 	authHandler := auth.NewHandler(authService)
 	userHandler := usermodule.NewHandler(userService)
 	projectHandler := projectmodule.NewHandler(projectService)
+	sprintHandler := sprintmodule.NewHandler(sprintService)
 
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.App.Name,
@@ -92,6 +96,7 @@ func main() {
 	auth.RegisterRoutes(api, authHandler, authMiddleware)
 	usermodule.RegisterRoutes(api, userHandler, authMiddleware, adminOnly)
 	projectmodule.RegisterRoutes(api, projectHandler, authMiddleware)
+	sprintmodule.RegisterRoutes(api, sprintHandler, authMiddleware)
 
 	serverErr := make(chan error, 1)
 	go func() {
