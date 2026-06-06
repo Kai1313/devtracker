@@ -60,6 +60,51 @@ CREATE TABLE IF NOT EXISTS task_statuses (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'task_statuses' AND column_name = 'name'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'task_statuses' AND column_name = 'status_name'
+    ) THEN
+        ALTER TABLE task_statuses RENAME COLUMN name TO status_name;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'task_statuses' AND column_name = 'color'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'task_statuses' AND column_name = 'color_name'
+    ) THEN
+        ALTER TABLE task_statuses RENAME COLUMN color TO color_name;
+    END IF;
+END $$;
+
+ALTER TABLE task_statuses
+ADD COLUMN IF NOT EXISTS color_hex VARCHAR(7),
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+UPDATE task_statuses
+SET color_hex = CASE LOWER(color_name)
+    WHEN 'gray' THEN '#6B7280'
+    WHEN 'yellow' THEN '#F59E0B'
+    WHEN 'blue' THEN '#3B82F6'
+    WHEN 'orange' THEN '#F97316'
+    WHEN 'green' THEN '#22C55E'
+    WHEN 'red' THEN '#EF4444'
+    ELSE '#6B7280'
+END
+WHERE color_hex IS NULL OR color_hex = '';
+
+ALTER TABLE task_statuses
+ALTER COLUMN color_hex SET NOT NULL;
+
 CREATE TABLE IF NOT EXISTS tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id),

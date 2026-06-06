@@ -3,12 +3,12 @@ package status
 import (
 	"strconv"
 
+	"devtracker/backend/internal/httpx"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
 	appvalidator "devtracker/backend/pkg/validator"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -43,7 +43,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Get(c *fiber.Ctx) error {
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Update(c *fiber.Ctx) error {
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Delete(c *fiber.Ctx) error {
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -108,13 +108,4 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 	}
 
 	return response.OK(c, "task status deleted", nil)
-}
-
-func parseID(c *fiber.Ctx) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return uuid.Nil, apperrors.BadRequest("id must be a valid UUID")
-	}
-
-	return id, nil
 }

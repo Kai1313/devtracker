@@ -1,4 +1,4 @@
-package auth
+package httpx
 
 const (
 	LocalUserID = "auth.user_id"

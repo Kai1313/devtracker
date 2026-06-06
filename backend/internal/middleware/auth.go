@@ -6,6 +6,7 @@ import (
 
 	"devtracker/backend/internal/auth"
 	"devtracker/backend/internal/config"
+	"devtracker/backend/internal/httpx"
 	"devtracker/backend/internal/user"
 	apperrors "devtracker/backend/pkg/errors"
 
@@ -46,10 +47,10 @@ func JWTAuth(cfg config.JWTConfig, users user.Repository) fiber.Handler {
 			return apperrors.Forbidden("user account is inactive")
 		}
 
-		c.Locals(auth.LocalUserID, account.ID.String())
-		c.Locals(auth.LocalEmail, account.Email)
-		c.Locals(auth.LocalName, account.Name)
-		c.Locals(auth.LocalRole, account.Role.Name)
+		c.Locals(httpx.LocalUserID, account.ID.String())
+		c.Locals(httpx.LocalEmail, account.Email)
+		c.Locals(httpx.LocalName, account.Name)
+		c.Locals(httpx.LocalRole, account.Role.Name)
 
 		return c.Next()
 	}
@@ -62,7 +63,7 @@ func RequireRoles(roles ...string) fiber.Handler {
 	}
 
 	return func(c *fiber.Ctx) error {
-		currentRole, ok := c.Locals(auth.LocalRole).(string)
+		currentRole, ok := c.Locals(httpx.LocalRole).(string)
 		if !ok || currentRole == "" {
 			return apperrors.Forbidden("role is required")
 		}

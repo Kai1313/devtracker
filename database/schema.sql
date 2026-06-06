@@ -132,6 +132,7 @@ CREATE TABLE kpi_snapshots (
 );
 
 CREATE INDEX idx_users_role_id ON users(role_id);
+CREATE INDEX idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX idx_task_statuses_is_active ON task_statuses(is_active);
 CREATE INDEX idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX idx_tasks_sprint_id ON tasks(sprint_id);

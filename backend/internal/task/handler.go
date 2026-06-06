@@ -1,13 +1,12 @@
 package task
 
 import (
-	"devtracker/backend/internal/auth"
+	"devtracker/backend/internal/httpx"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
 	appvalidator "devtracker/backend/pkg/validator"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -38,7 +37,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Get(c *fiber.Ctx) error {
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -52,7 +51,7 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ListHistories(c *fiber.Ctx) error {
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -66,7 +65,7 @@ func (h *Handler) ListHistories(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Create(c *fiber.Ctx) error {
-	actorID, err := currentUserID(c)
+	actorID, err := httpx.CurrentUserID(c)
 	if err != nil {
 		return err
 	}
@@ -89,12 +88,12 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Update(c *fiber.Ctx) error {
-	actorID, err := currentUserID(c)
+	actorID, err := httpx.CurrentUserID(c)
 	if err != nil {
 		return err
 	}
 
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -117,7 +116,7 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Delete(c *fiber.Ctx) error {
-	id, err := parseID(c)
+	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
@@ -127,27 +126,4 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 	}
 
 	return response.OK(c, "task deleted", nil)
-}
-
-func parseID(c *fiber.Ctx) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return uuid.Nil, apperrors.BadRequest("id must be a valid UUID")
-	}
-
-	return id, nil
-}
-
-func currentUserID(c *fiber.Ctx) (uuid.UUID, error) {
-	raw, ok := c.Locals(auth.LocalUserID).(string)
-	if !ok || raw == "" {
-		return uuid.Nil, apperrors.Unauthorized("authenticated user is missing")
-	}
-
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, apperrors.Unauthorized("authenticated user is invalid")
-	}
-
-	return id, nil
 }
