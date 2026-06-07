@@ -40,6 +40,8 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		SprintID:    c.Query("sprint_id"),
 		StatusID:    c.Query("status_id"),
 		Search:      c.Query("search"),
+		SortBy:      c.Query("sort_by"),
+		SortOrder:   c.Query("sort_order"),
 	}
 
 	result, meta, err := h.service.ListWithAccess(c.UserContext(), query, scope)

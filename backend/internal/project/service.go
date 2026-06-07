@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	appquery "devtracker/backend/internal/query"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/google/uuid"
@@ -18,14 +19,32 @@ type Service struct {
 	repository Repository
 }
 
+var projectSortFields = map[string]string{
+	"project_code": "project_code",
+	"project_name": "project_name",
+	"client_name":  "client_name",
+	"status":       "status",
+	"start_date":   "start_date",
+	"end_date":     "end_date",
+	"created_at":   "created_at",
+	"updated_at":   "updated_at",
+}
+
 func NewService(repository Repository) *Service {
 	return &Service{repository: repository}
 }
 
 func (s *Service) List(ctx context.Context, filter ListProjectsQuery) ([]ProjectResponse, map[string]any, error) {
-	filter.Page = normalizePage(filter.Page)
-	filter.Limit = normalizeLimit(filter.Limit)
+	filter.Page = appquery.NormalizePage(filter.Page)
+	filter.Limit = appquery.NormalizeLimit(filter.Limit)
 	filter.Search = strings.TrimSpace(filter.Search)
+
+	sort, err := appquery.NormalizeSort(filter.SortBy, filter.SortOrder, projectSortFields, appquery.Sort{By: "created_at", Order: appquery.Descending})
+	if err != nil {
+		return nil, nil, err
+	}
+	filter.SortBy = sort.By
+	filter.SortOrder = sort.Order
 
 	projects, total, err := s.repository.List(ctx, filter)
 	if err != nil {
@@ -33,9 +52,11 @@ func (s *Service) List(ctx context.Context, filter ListProjectsQuery) ([]Project
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(projects), meta, nil
@@ -239,24 +260,4 @@ func normalizeStatus(value string) string {
 	}
 
 	return status
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }

@@ -29,6 +29,8 @@ type ListSprintsQuery struct {
 	Limit     int
 	ProjectID string
 	Status    string
+	SortBy    string
+	SortOrder string
 }
 
 type SprintResponse struct {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"devtracker/backend/internal/project"
+	appquery "devtracker/backend/internal/query"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/google/uuid"
@@ -24,6 +25,15 @@ type Service struct {
 	repository  Repository
 	projects    project.Repository
 	snapshotter KPISnapshotter
+}
+
+var sprintSortFields = map[string]string{
+	"sprint_name": "sprint_name",
+	"start_date":  "start_date",
+	"end_date":    "end_date",
+	"status":      "status",
+	"created_at":  "created_at",
+	"updated_at":  "updated_at",
 }
 
 type KPISnapshotter interface {
@@ -44,8 +54,15 @@ func NewService(repository Repository, projects project.Repository, snapshotters
 }
 
 func (s *Service) List(ctx context.Context, filter ListSprintsQuery) ([]SprintResponse, map[string]any, error) {
-	filter.Page = normalizePage(filter.Page)
-	filter.Limit = normalizeLimit(filter.Limit)
+	filter.Page = appquery.NormalizePage(filter.Page)
+	filter.Limit = appquery.NormalizeLimit(filter.Limit)
+
+	sort, err := appquery.NormalizeSort(filter.SortBy, filter.SortOrder, sprintSortFields, appquery.Sort{By: "start_date", Order: appquery.Descending})
+	if err != nil {
+		return nil, nil, err
+	}
+	filter.SortBy = sort.By
+	filter.SortOrder = sort.Order
 
 	if filter.ProjectID != "" {
 		projectID, err := uuid.Parse(strings.TrimSpace(filter.ProjectID))
@@ -68,9 +85,11 @@ func (s *Service) List(ctx context.Context, filter ListSprintsQuery) ([]SprintRe
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(sprints), meta, nil
@@ -346,24 +365,4 @@ func isValidStatus(status string) bool {
 
 func normalizeText(value string) string {
 	return strings.TrimSpace(value)
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }

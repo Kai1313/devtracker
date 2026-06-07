@@ -25,6 +25,8 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		Limit:     c.QueryInt("limit", 20),
 		ProjectID: c.Query("project_id"),
 		Status:    c.Query("status"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
 	}
 
 	result, meta, err := h.service.List(c.UserContext(), query)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	appquery "devtracker/backend/internal/query"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -58,6 +60,16 @@ func (r *repository) FindByName(ctx context.Context, name string) (*TaskStatus, 
 func (r *repository) List(ctx context.Context, filter ListTaskStatusesQuery) ([]TaskStatus, int64, error) {
 	query := r.db.WithContext(ctx).Model(&TaskStatus{})
 
+	if filter.Search != "" {
+		term := "%" + strings.ToLower(filter.Search) + "%"
+		query = query.Where(
+			"LOWER(status_name) LIKE ? OR LOWER(color_name) LIKE ? OR LOWER(color_hex) LIKE ?",
+			term,
+			term,
+			term,
+		)
+	}
+
 	if filter.IsActive != nil {
 		query = query.Where("is_active = ?", *filter.IsActive)
 	}
@@ -70,7 +82,7 @@ func (r *repository) List(ctx context.Context, filter ListTaskStatusesQuery) ([]
 	var statuses []TaskStatus
 	offset := (filter.Page - 1) * filter.Limit
 	err := query.
-		Order("status_order ASC").
+		Order(appquery.OrderClause(appquery.Sort{By: filter.SortBy, Order: filter.SortOrder}, taskStatusSortFields)).
 		Order("created_at ASC").
 		Offset(offset).
 		Limit(filter.Limit).

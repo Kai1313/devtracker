@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	appquery "devtracker/backend/internal/query"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -144,7 +146,7 @@ func (r *repository) List(ctx context.Context, filter ListUsersQuery) ([]User, i
 	var users []User
 	offset := (filter.Page - 1) * filter.Limit
 	err := query.
-		Order("created_at DESC").
+		Order(appquery.OrderClause(appquery.Sort{By: filter.SortBy, Order: filter.SortOrder}, userSortFields)).
 		Offset(offset).
 		Limit(filter.Limit).
 		Find(&users).

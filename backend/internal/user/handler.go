@@ -23,10 +23,12 @@ func NewHandler(service *Service, auditService *audit.Service) *Handler {
 
 func (h *Handler) List(c *fiber.Ctx) error {
 	query := ListUsersQuery{
-		Page:   c.QueryInt("page", 1),
-		Limit:  c.QueryInt("limit", 20),
-		Search: c.Query("search"),
-		RoleID: c.Query("role_id"),
+		Page:      c.QueryInt("page", 1),
+		Limit:     c.QueryInt("limit", 20),
+		Search:    c.Query("search"),
+		RoleID:    c.Query("role_id"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
 	}
 
 	if value := c.Query("is_active"); value != "" {

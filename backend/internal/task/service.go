@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"devtracker/backend/internal/project"
+	appquery "devtracker/backend/internal/query"
 	"devtracker/backend/internal/sprint"
 	"devtracker/backend/internal/status"
 	"devtracker/backend/internal/user"
@@ -30,6 +31,20 @@ type Service struct {
 	projects   project.Repository
 	sprints    sprint.Repository
 	statuses   status.Repository
+}
+
+var taskSortFields = map[string]string{
+	"ticket_number":   "ticket_number",
+	"task_title":      "task_title",
+	"priority":        "priority",
+	"estimated_point": "estimated_point",
+	"actual_point":    "actual_point",
+	"start_date":      "start_date",
+	"due_date":        "due_date",
+	"completed_date":  "completed_date",
+	"qa_checked_date": "qa_checked_date",
+	"created_at":      "created_at",
+	"updated_at":      "updated_at",
 }
 
 type AccessScope struct {
@@ -101,9 +116,11 @@ func (s *Service) list(ctx context.Context, filter ListTasksQuery, access ListAc
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(tasks), meta, nil
@@ -584,9 +601,16 @@ func newStatusHistory(taskID uuid.UUID, oldStatusID *uuid.UUID, newStatusID uuid
 }
 
 func prepareListFilter(filter ListTasksQuery) (ListTasksQuery, error) {
-	filter.Page = normalizePage(filter.Page)
-	filter.Limit = normalizeLimit(filter.Limit)
+	filter.Page = appquery.NormalizePage(filter.Page)
+	filter.Limit = appquery.NormalizeLimit(filter.Limit)
 	filter.Search = strings.TrimSpace(filter.Search)
+
+	sort, err := appquery.NormalizeSort(filter.SortBy, filter.SortOrder, taskSortFields, appquery.Sort{By: "created_at", Order: appquery.Descending})
+	if err != nil {
+		return ListTasksQuery{}, err
+	}
+	filter.SortBy = sort.By
+	filter.SortOrder = sort.Order
 
 	if err := normalizeFilterIDs(&filter); err != nil {
 		return ListTasksQuery{}, err
@@ -809,26 +833,6 @@ func normalizeStatusName(value string) string {
 
 func normalizeText(value string) string {
 	return strings.TrimSpace(value)
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }
 
 type referenceInput struct {

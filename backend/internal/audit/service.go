@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	appquery "devtracker/backend/internal/query"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/google/uuid"
@@ -15,6 +16,13 @@ import (
 const dateLayout = "2006-01-02"
 
 var projectManagerAuditModules = []string{"projects", "sprints", "tasks"}
+
+var auditSortFields = map[string]string{
+	"user_id":    "user_id",
+	"module":     "module",
+	"action":     "action",
+	"created_at": "created_at",
+}
 
 type Service struct {
 	repository Repository
@@ -70,9 +78,11 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]AuditLogResponse
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(logs), meta, nil
@@ -103,9 +113,11 @@ func (s *Service) ListWithScope(ctx context.Context, query ListQuery, scope List
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(logs), meta, nil
@@ -113,11 +125,18 @@ func (s *Service) ListWithScope(ctx context.Context, query ListQuery, scope List
 
 func normalizeListQuery(query ListQuery) (listFilter, error) {
 	filter := listFilter{
-		Page:   normalizePage(query.Page),
-		Limit:  normalizeLimit(query.Limit),
+		Page:   appquery.NormalizePage(query.Page),
+		Limit:  appquery.NormalizeLimit(query.Limit),
 		Module: normalize(query.Module),
 		Action: normalize(query.Action),
 	}
+
+	sort, err := appquery.NormalizeSort(query.SortBy, query.SortOrder, auditSortFields, appquery.Sort{By: "created_at", Order: appquery.Descending})
+	if err != nil {
+		return filter, err
+	}
+	filter.SortBy = sort.By
+	filter.SortOrder = sort.Order
 
 	if strings.TrimSpace(query.UserID) != "" {
 		userID, err := uuid.Parse(strings.TrimSpace(query.UserID))
@@ -203,24 +222,4 @@ func normalizeModules(values []string) []string {
 	}
 
 	return result
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }

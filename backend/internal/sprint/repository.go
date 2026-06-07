@@ -3,6 +3,8 @@ package sprint
 import (
 	"context"
 
+	appquery "devtracker/backend/internal/query"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -64,7 +66,7 @@ func (r *repository) List(ctx context.Context, filter ListSprintsQuery) ([]Sprin
 	var sprints []Sprint
 	offset := (filter.Page - 1) * filter.Limit
 	err := query.
-		Order("start_date DESC").
+		Order(appquery.OrderClause(appquery.Sort{By: filter.SortBy, Order: filter.SortOrder}, sprintSortFields)).
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(filter.Limit).

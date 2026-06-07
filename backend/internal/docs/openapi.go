@@ -100,7 +100,7 @@ func paths() map[string]any {
 				"password": "secret123",
 			}), map[string]any{
 				"200": response("login successful", ref("LoginResponse"), example("login successful", loginExample())),
-				"401": errorResponse("invalid email or password"),
+				"401": errorResponseWithCode("invalid email or password", "unauthorized"),
 			}),
 		},
 		"/auth/logout": map[string]any{
@@ -116,7 +116,7 @@ func paths() map[string]any {
 				"password": "secret123",
 			}), map[string]any{
 				"201": response("bootstrap admin created", ref("User"), example("bootstrap admin created", userExample())),
-				"409": errorResponse("bootstrap admin can only be created before any users exist"),
+				"409": errorResponseWithCode("bootstrap admin can only be created before any users exist", "conflict"),
 			}),
 		},
 		"/auth/me": map[string]any{
@@ -188,7 +188,7 @@ func paths() map[string]any {
 			}),
 		},
 		"/statuses": map[string]any{
-			"get": operation([]string{"Task Statuses"}, "List task statuses", "Lists task statuses. Requires `manage_task_statuses` permission.", true, append(pageParams(), queryParam("is_active", "boolean", "Filter by active state", true)), nil, map[string]any{
+			"get": operation([]string{"Task Statuses"}, "List task statuses", "Lists task statuses. Requires `manage_task_statuses` permission.", true, append(pageParams(), queryParam("search", "string", "Search by status_name, color_name, or color_hex", "Ready"), queryParam("is_active", "boolean", "Filter by active state", true)), nil, map[string]any{
 				"200": listResponse("task statuses retrieved", arrayOf(ref("TaskStatus")), example("task statuses retrieved", []any{statusExample()})),
 			}),
 			"post": operation([]string{"Task Statuses"}, "Create task status", "Creates a task status. Requires `manage_task_statuses` permission.", true, nil, request("CreateTaskStatusRequest", map[string]any{
@@ -334,6 +334,9 @@ func operation(tags []string, summary, description string, protected bool, param
 		if _, ok := responses["403"]; !ok {
 			responses["403"] = errorResponseWithCode("insufficient permissions", "forbidden")
 		}
+		if _, ok := responses["500"]; !ok {
+			responses["500"] = errorResponseWithCode("internal server error", "internal_error")
+		}
 	}
 
 	result := map[string]any{
@@ -396,7 +399,7 @@ func schemas() map[string]any {
 	return map[string]any{
 		"HealthResponse":        object(nil, props("app", str(), "env", str())),
 		"LoginRequest":          object([]string{"email", "password"}, props("email", str(), "password", str())),
-		"PaginationMeta":        object(nil, props("page", integer(), "limit", integer(), "total", integer())),
+		"PaginationMeta":        object(nil, props("page", integer(), "limit", integer(), "total", integer(), "sort_by", str(), "sort_order", str())),
 		"ErrorResponse":         object(nil, props("success", boolean(), "message", str(), "error", object(nil, props("code", str(), "details", map[string]any{"type": "object", "additionalProperties": true})))),
 		"RBACPolicy":            object(nil, props("roles", map[string]any{"type": "object", "additionalProperties": true}, "permissions", arrayOf(str()))),
 		"BootstrapAdminRequest": object([]string{"name", "email", "password"}, props("name", str(), "email", str(), "password", str())),
@@ -537,7 +540,7 @@ func listResponse(description string, dataSchema any, exampleValue any) map[stri
 }
 
 func errorResponse(message string) map[string]any {
-	return errorResponseWithCode(message, "bad_request")
+	return errorResponseWithCode(message, exampleErrorCode(message))
 }
 
 func errorResponseWithCode(message, code string) map[string]any {
@@ -562,6 +565,20 @@ func validationErrorResponse() map[string]any {
 	return errorResponseWithCode("validation failed", "validation_error")
 }
 
+func exampleErrorCode(message string) string {
+	normalized := strings.ToLower(message)
+	switch {
+	case strings.Contains(normalized, "not found"):
+		return "not_found"
+	case strings.Contains(normalized, "insufficient permissions"):
+		return "forbidden"
+	case strings.Contains(normalized, "missing bearer token"), strings.Contains(normalized, "authenticated user"):
+		return "unauthorized"
+	default:
+		return "bad_request"
+	}
+}
+
 func example(message string, data any) map[string]any {
 	result := map[string]any{"success": true, "message": message}
 	if data != nil {
@@ -575,7 +592,7 @@ func withMeta(message string, data any) map[string]any {
 		"success": true,
 		"message": message,
 		"data":    data,
-		"meta":    map[string]any{"page": 1, "limit": 20, "total": 1},
+		"meta":    map[string]any{"page": 1, "limit": 20, "total": 1, "sort_by": "created_at", "sort_order": "desc"},
 	}
 }
 
@@ -583,6 +600,8 @@ func pageParams() []any {
 	return []any{
 		queryParam("page", "integer", "Page number", 1),
 		queryParam("limit", "integer", "Page size, max 100", 20),
+		queryParam("sort_by", "string", "Sort field. Allowed values depend on the endpoint.", "created_at"),
+		queryParam("sort_order", "string", "Sort direction: asc or desc", "desc"),
 	}
 }
 

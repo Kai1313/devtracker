@@ -29,6 +29,8 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		Action:    c.Query("action"),
 		StartDate: c.Query("start_date"),
 		EndDate:   c.Query("end_date"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
 	}, auditScope(c))
 	if err != nil {
 		return err

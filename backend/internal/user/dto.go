@@ -27,11 +27,13 @@ type UpdateUserRequest struct {
 }
 
 type ListUsersQuery struct {
-	Page     int
-	Limit    int
-	Search   string
-	RoleID   string
-	IsActive *bool
+	Page      int
+	Limit     int
+	Search    string
+	RoleID    string
+	IsActive  *bool
+	SortBy    string
+	SortOrder string
 }
 
 type UserResponse struct {

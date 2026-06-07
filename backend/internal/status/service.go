@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	appquery "devtracker/backend/internal/query"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/google/uuid"
@@ -18,13 +19,33 @@ type Service struct {
 	repository Repository
 }
 
+var taskStatusSortFields = map[string]string{
+	"status_name":  "status_name",
+	"color_name":   "color_name",
+	"color_hex":    "color_hex",
+	"status_order": "status_order",
+	"is_done":      "is_done",
+	"is_qa_status": "is_qa_status",
+	"is_active":    "is_active",
+	"created_at":   "created_at",
+	"updated_at":   "updated_at",
+}
+
 func NewService(repository Repository) *Service {
 	return &Service{repository: repository}
 }
 
 func (s *Service) List(ctx context.Context, filter ListTaskStatusesQuery) ([]TaskStatusResponse, map[string]any, error) {
-	filter.Page = normalizePage(filter.Page)
-	filter.Limit = normalizeLimit(filter.Limit)
+	filter.Page = appquery.NormalizePage(filter.Page)
+	filter.Limit = appquery.NormalizeLimit(filter.Limit)
+	filter.Search = strings.TrimSpace(filter.Search)
+
+	sort, err := appquery.NormalizeSort(filter.SortBy, filter.SortOrder, taskStatusSortFields, appquery.Sort{By: "status_order", Order: appquery.Ascending})
+	if err != nil {
+		return nil, nil, err
+	}
+	filter.SortBy = sort.By
+	filter.SortOrder = sort.Order
 
 	statuses, total, err := s.repository.List(ctx, filter)
 	if err != nil {
@@ -32,9 +53,11 @@ func (s *Service) List(ctx context.Context, filter ListTaskStatusesQuery) ([]Tas
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(statuses), meta, nil
@@ -203,24 +226,4 @@ func normalizeColorHex(value string) (string, error) {
 
 func normalizeText(value string) string {
 	return strings.TrimSpace(value)
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }

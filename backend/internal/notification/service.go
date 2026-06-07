@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	appquery "devtracker/backend/internal/query"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/google/uuid"
@@ -14,6 +15,14 @@ import (
 
 type Service struct {
 	repository Repository
+}
+
+var notificationSortFields = map[string]string{
+	"title":      "title",
+	"type":       "type",
+	"is_read":    "is_read",
+	"read_at":    "read_at",
+	"created_at": "created_at",
 }
 
 func NewService(repository Repository) *Service {
@@ -53,8 +62,15 @@ func (s *Service) Create(ctx context.Context, input CreateInput) error {
 }
 
 func (s *Service) List(ctx context.Context, query ListQuery) (*ListResponse, map[string]any, error) {
-	query.Page = normalizePage(query.Page)
-	query.Limit = normalizeLimit(query.Limit)
+	query.Page = appquery.NormalizePage(query.Page)
+	query.Limit = appquery.NormalizeLimit(query.Limit)
+
+	sort, err := appquery.NormalizeSort(query.SortBy, query.SortOrder, notificationSortFields, appquery.Sort{By: "created_at", Order: appquery.Descending})
+	if err != nil {
+		return nil, nil, err
+	}
+	query.SortBy = sort.By
+	query.SortOrder = sort.Order
 
 	if query.UserID == uuid.Nil {
 		return nil, nil, apperrors.BadRequest("user_id is required")
@@ -71,9 +87,11 @@ func (s *Service) List(ctx context.Context, query ListQuery) (*ListResponse, map
 	}
 
 	meta := map[string]any{
-		"page":  query.Page,
-		"limit": query.Limit,
-		"total": total,
+		"page":       query.Page,
+		"limit":      query.Limit,
+		"total":      total,
+		"sort_by":    query.SortBy,
+		"sort_order": query.SortOrder,
 	}
 
 	return &ListResponse{
@@ -159,24 +177,4 @@ func normalize(value string) string {
 	normalized = strings.ReplaceAll(normalized, "-", "_")
 
 	return normalized
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }

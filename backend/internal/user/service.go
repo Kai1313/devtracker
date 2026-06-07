@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	appquery "devtracker/backend/internal/query"
 	apperrors "devtracker/backend/pkg/errors"
 
 	"github.com/google/uuid"
@@ -16,14 +17,31 @@ type Service struct {
 	repository Repository
 }
 
+var userSortFields = map[string]string{
+	"name":       "name",
+	"email":      "email",
+	"team":       "team",
+	"position":   "position",
+	"is_active":  "is_active",
+	"created_at": "created_at",
+	"updated_at": "updated_at",
+}
+
 func NewService(repository Repository) *Service {
 	return &Service{repository: repository}
 }
 
 func (s *Service) List(ctx context.Context, filter ListUsersQuery) ([]UserResponse, map[string]any, error) {
-	filter.Page = normalizePage(filter.Page)
-	filter.Limit = normalizeLimit(filter.Limit)
+	filter.Page = appquery.NormalizePage(filter.Page)
+	filter.Limit = appquery.NormalizeLimit(filter.Limit)
 	filter.Search = strings.TrimSpace(filter.Search)
+
+	sort, err := appquery.NormalizeSort(filter.SortBy, filter.SortOrder, userSortFields, appquery.Sort{By: "created_at", Order: appquery.Descending})
+	if err != nil {
+		return nil, nil, err
+	}
+	filter.SortBy = sort.By
+	filter.SortOrder = sort.Order
 
 	if filter.RoleID != "" {
 		if _, err := uuid.Parse(filter.RoleID); err != nil {
@@ -37,9 +55,11 @@ func (s *Service) List(ctx context.Context, filter ListUsersQuery) ([]UserRespon
 	}
 
 	meta := map[string]any{
-		"page":  filter.Page,
-		"limit": filter.Limit,
-		"total": total,
+		"page":       filter.Page,
+		"limit":      filter.Limit,
+		"total":      total,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
 
 	return NewResponses(users), meta, nil
@@ -234,24 +254,4 @@ func hashPassword(password string) (string, error) {
 
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
-}
-
-func normalizePage(page int) int {
-	if page < 1 {
-		return 1
-	}
-
-	return page
-}
-
-func normalizeLimit(limit int) int {
-	if limit < 1 {
-		return 20
-	}
-
-	if limit > 100 {
-		return 100
-	}
-
-	return limit
 }

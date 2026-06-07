@@ -55,6 +55,8 @@ type ListTasksQuery struct {
 	SprintID    string
 	StatusID    string
 	Search      string
+	SortBy      string
+	SortOrder   string
 }
 
 type ListAccessFilter struct {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	appquery "devtracker/backend/internal/query"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -72,7 +74,7 @@ func (r *repository) List(ctx context.Context, query ListQuery) ([]Notification,
 	var notifications []Notification
 	offset := (query.Page - 1) * query.Limit
 	err := dbQuery.
-		Order("created_at DESC").
+		Order(appquery.OrderClause(appquery.Sort{By: query.SortBy, Order: query.SortOrder}, notificationSortFields)).
 		Offset(offset).
 		Limit(query.Limit).
 		Find(&notifications).

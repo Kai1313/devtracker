@@ -27,9 +27,12 @@ type UpdateTaskStatusRequest struct {
 }
 
 type ListTaskStatusesQuery struct {
-	Page     int
-	Limit    int
-	IsActive *bool
+	Page      int
+	Limit     int
+	Search    string
+	IsActive  *bool
+	SortBy    string
+	SortOrder string
 }
 
 type TaskStatusResponse struct {

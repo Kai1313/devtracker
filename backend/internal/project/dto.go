@@ -25,9 +25,11 @@ type UpdateProjectRequest struct {
 }
 
 type ListProjectsQuery struct {
-	Page   int
-	Limit  int
-	Search string
+	Page      int
+	Limit     int
+	Search    string
+	SortBy    string
+	SortOrder string
 }
 
 type ProjectResponse struct {

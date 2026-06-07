@@ -15,6 +15,8 @@ type ListQuery struct {
 	Action    string
 	StartDate string
 	EndDate   string
+	SortBy    string
+	SortOrder string
 }
 
 type listFilter struct {
@@ -26,6 +28,8 @@ type listFilter struct {
 	Action    string
 	StartDate *time.Time
 	EndDate   *time.Time
+	SortBy    string
+	SortOrder string
 }
 
 type ListScope struct {

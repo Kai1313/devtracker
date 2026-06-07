@@ -29,6 +29,8 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		Limit:      c.QueryInt("limit", 20),
 		UserID:     userID,
 		IncludeAll: isAdmin(c),
+		SortBy:     c.Query("sort_by"),
+		SortOrder:  c.Query("sort_order"),
 	})
 	if err != nil {
 		return err

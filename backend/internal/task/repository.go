@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	appquery "devtracker/backend/internal/query"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -119,7 +121,7 @@ func (r *repository) list(ctx context.Context, filter ListTasksQuery, access Lis
 	var tasks []Task
 	offset := (filter.Page - 1) * filter.Limit
 	err := query.
-		Order("created_at DESC").
+		Order(appquery.OrderClause(appquery.Sort{By: filter.SortBy, Order: filter.SortOrder}, taskSortFields)).
 		Offset(offset).
 		Limit(filter.Limit).
 		Find(&tasks).

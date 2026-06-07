@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 
+	appquery "devtracker/backend/internal/query"
+
 	"gorm.io/gorm"
 )
 
@@ -58,7 +60,7 @@ func (r *repository) List(ctx context.Context, filter listFilter) ([]AuditLog, i
 	var logs []AuditLog
 	offset := (filter.Page - 1) * filter.Limit
 	err := query.
-		Order("created_at DESC").
+		Order(appquery.OrderClause(appquery.Sort{By: filter.SortBy, Order: filter.SortOrder}, auditSortFields)).
 		Offset(offset).
 		Limit(filter.Limit).
 		Find(&logs).

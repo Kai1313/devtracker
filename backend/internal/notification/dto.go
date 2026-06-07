@@ -21,6 +21,8 @@ type ListQuery struct {
 	Limit      int
 	UserID     uuid.UUID
 	IncludeAll bool
+	SortBy     string
+	SortOrder  string
 }
 
 type CreateInput struct {
