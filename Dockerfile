@@ -4,7 +4,7 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /src/backend
 
-RUN apk add --no-cache git
+RUN apk add --no-cache ca-certificates git
 
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
@@ -20,7 +20,7 @@ RUN apk add --no-cache ca-certificates tzdata wget \
 
 WORKDIR /app
 
-COPY --from=builder /out/devtracker-api /app/devtracker-api
+COPY --from=builder --chown=app:app /out/devtracker-api /app/devtracker-api
 
 ENV APP_ENV=production \
 	APP_PORT=8080 \
@@ -32,6 +32,6 @@ EXPOSE 8080
 USER app
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-	CMD wget -qO- "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null || exit 1
+	CMD wget -qO- "http://127.0.0.1:${APP_PORT}${APP_BASE_PATH}/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/app/devtracker-api"]
