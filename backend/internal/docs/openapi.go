@@ -68,7 +68,7 @@ func Spec(basePath string) map[string]any {
 			tag("Tasks", "Task assignment, status changes, and history"),
 			tag("Dashboard", "Dashboard summary APIs"),
 			tag("KPI", "Developer and project KPI APIs"),
-			tag("Audit Logs", "Admin audit trail"),
+			tag("Audit Logs", "Audit trail. Admin can view all logs; Project Manager can view task, project, and sprint logs only."),
 			tag("Notifications", "Database notifications"),
 			tag("Workload", "Developer workload API"),
 		},
@@ -241,7 +241,7 @@ func paths() map[string]any {
 			}),
 		},
 		"/audit-logs": map[string]any{
-			"get": operation([]string{"Audit Logs"}, "List audit logs", "Lists audit trail entries. Admin only.", true, append(pageParams(), queryParam("user", "string", "Filter by user UUID. Alias: user_id", idExample()), queryParam("module", "string", "Filter by module", "tasks"), queryParam("start_date", "string", "Start date YYYY-MM-DD", "2026-01-01"), queryParam("end_date", "string", "End date YYYY-MM-DD", "2026-01-31")), nil, map[string]any{
+			"get": operation([]string{"Audit Logs"}, "List audit logs", "Lists audit trail entries. Admin can view all logs; Project Manager can view task, project, and sprint logs only.", true, append(pageParams(), queryParam("user_id", "string", "Filter by user UUID. Alias: user", idExample()), queryParam("module", "string", "Filter by module", "tasks"), queryParam("action", "string", "Filter by action", "task_status_change"), queryParam("start_date", "string", "Start date YYYY-MM-DD", "2026-01-01"), queryParam("end_date", "string", "End date YYYY-MM-DD", "2026-01-31")), nil, map[string]any{
 				"200": listResponse("audit logs retrieved", arrayOf(ref("AuditLog")), example("audit logs retrieved", []any{auditLogExample()})),
 				"403": errorResponse("insufficient permissions"),
 			}),
@@ -354,7 +354,7 @@ func schemas() map[string]any {
 		"DashboardSummary":        object(nil, props("total_tasks", integer(), "todo_tasks", integer(), "in_progress_tasks", integer(), "ready_to_check_tasks", integer(), "checked_by_qa_tasks", integer(), "done_tasks", integer(), "blocked_tasks", integer(), "completion_rate", number(), "total_developers", integer(), "total_projects", integer())),
 		"DeveloperKPI":            object(nil, props("developer_id", uuidSchema(), "developer_name", str(), "total_assigned", integer(), "total_done", integer(), "total_ready_to_check", integer(), "total_checked_by_qa", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_point", number(), "total_actual_point", number())),
 		"ProjectKPI":              object(nil, props("project_id", uuidSchema(), "project_name", str(), "total_assigned", integer(), "total_done", integer(), "total_ready_to_check", integer(), "total_checked_by_qa", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_point", number(), "total_actual_point", number())),
-		"AuditLog":                object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "module", str(), "action", str(), "old_value", map[string]any{"type": "object", "additionalProperties": true}, "new_value", map[string]any{"type": "object", "additionalProperties": true}, "ip_address", str(), "created_at", dateTime())),
+		"AuditLog":                object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "module", str(), "action", str(), "entity_id", uuidSchema(), "old_value", map[string]any{"type": "object", "additionalProperties": true}, "new_value", map[string]any{"type": "object", "additionalProperties": true}, "ip_address", str(), "user_agent", str(), "created_at", dateTime())),
 		"Notification":            object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "task_id", uuidSchema(), "type", str(), "title", str(), "message", str(), "is_read", boolean(), "read_at", dateTime(), "created_at", dateTime())),
 		"NotificationList":        object(nil, props("notifications", arrayOf(ref("Notification")), "unread_count", integer())),
 		"NotificationRead":        object(nil, props("notification", ref("Notification"), "unread_count", integer())),
@@ -607,7 +607,7 @@ func projectKPIExample() map[string]any {
 }
 
 func auditLogExample() map[string]any {
-	return map[string]any{"id": idExample(), "user_id": idExample(), "module": "tasks", "action": "status_change", "old_value": map[string]any{"status_name": "In Progress"}, "new_value": map[string]any{"status_name": "Ready to Check"}, "ip_address": "127.0.0.1", "created_at": "2026-01-01T00:00:00Z"}
+	return map[string]any{"id": idExample(), "user_id": idExample(), "module": "tasks", "action": "task_status_change", "entity_id": idExample(), "old_value": map[string]any{"status_name": "In Progress"}, "new_value": map[string]any{"status_name": "Ready to Check"}, "ip_address": "127.0.0.1", "user_agent": "Mozilla/5.0", "created_at": "2026-01-01T00:00:00Z"}
 }
 
 func notificationExample() map[string]any {

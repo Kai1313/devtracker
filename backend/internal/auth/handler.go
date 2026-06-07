@@ -39,6 +39,7 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		UserID:   &userID,
 		Module:   "auth",
 		Action:   "login",
+		EntityID: &userID,
 		NewValue: result.User,
 	}); err != nil {
 		return err
@@ -54,9 +55,10 @@ func (h *Handler) Logout(c *fiber.Ctx) error {
 	}
 
 	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
-		UserID: &userID,
-		Module: "auth",
-		Action: "logout",
+		UserID:   &userID,
+		Module:   "auth",
+		Action:   "logout",
+		EntityID: &userID,
 	}); err != nil {
 		return err
 	}
@@ -84,6 +86,7 @@ func (h *Handler) BootstrapAdmin(c *fiber.Ctx) error {
 		UserID:   &userID,
 		Module:   "users",
 		Action:   "create",
+		EntityID: &userID,
 		NewValue: result,
 	}); err != nil {
 		return err

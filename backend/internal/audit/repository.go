@@ -34,6 +34,14 @@ func (r *repository) List(ctx context.Context, filter listFilter) ([]AuditLog, i
 		query = query.Where("module = ?", filter.Module)
 	}
 
+	if len(filter.Modules) > 0 {
+		query = query.Where("module IN ?", filter.Modules)
+	}
+
+	if filter.Action != "" {
+		query = query.Where("action = ?", filter.Action)
+	}
+
 	if filter.StartDate != nil {
 		query = query.Where("created_at >= ?", *filter.StartDate)
 	}

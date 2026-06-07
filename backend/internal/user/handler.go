@@ -84,6 +84,7 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "users",
 		Action:   "create",
+		EntityID: &result.ID,
 		NewValue: result,
 	}); err != nil {
 		return err
@@ -126,10 +127,24 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "users",
 		Action:   "update",
+		EntityID: &result.ID,
 		OldValue: oldValue,
 		NewValue: result,
 	}); err != nil {
 		return err
+	}
+
+	if oldValue.RoleID != result.RoleID {
+		if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+			UserID:   &actorID,
+			Module:   "users",
+			Action:   "role_change",
+			EntityID: &result.ID,
+			OldValue: userRoleAuditValue(oldValue),
+			NewValue: userRoleAuditValue(result),
+		}); err != nil {
+			return err
+		}
 	}
 
 	return response.OK(c, "user updated", result)
@@ -159,10 +174,19 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "users",
 		Action:   "delete",
+		EntityID: &id,
 		OldValue: oldValue,
 	}); err != nil {
 		return err
 	}
 
 	return response.OK(c, "user deleted", nil)
+}
+
+func userRoleAuditValue(user *UserResponse) map[string]any {
+	return map[string]any{
+		"user_id":   user.ID,
+		"role_id":   user.RoleID,
+		"role_name": user.Role.Name,
+	}
 }

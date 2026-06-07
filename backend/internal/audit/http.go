@@ -8,5 +8,6 @@ func RecordHTTPRequest(c *fiber.Ctx, service *Service, input RecordInput) error 
 	}
 
 	input.IPAddress = c.IP()
+	input.UserAgent = c.Get(fiber.HeaderUserAgent)
 	return service.Record(c.UserContext(), input)
 }

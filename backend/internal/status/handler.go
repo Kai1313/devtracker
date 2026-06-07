@@ -82,6 +82,7 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "task_statuses",
 		Action:   "create",
+		EntityID: &result.ID,
 		NewValue: result,
 	}); err != nil {
 		return err
@@ -124,6 +125,7 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "task_statuses",
 		Action:   "update",
+		EntityID: &result.ID,
 		OldValue: oldValue,
 		NewValue: result,
 	}); err != nil {
@@ -157,6 +159,7 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "task_statuses",
 		Action:   "delete",
+		EntityID: &id,
 		OldValue: oldValue,
 	}); err != nil {
 		return err

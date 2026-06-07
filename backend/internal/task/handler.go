@@ -111,6 +111,7 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "tasks",
 		Action:   "create",
+		EntityID: &result.ID,
 		NewValue: result,
 	}); err != nil {
 		return err
@@ -158,6 +159,7 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "tasks",
 		Action:   "update",
+		EntityID: &result.ID,
 		OldValue: oldValue,
 		NewValue: result,
 	}); err != nil {
@@ -168,7 +170,8 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
 			UserID:   &actorID,
 			Module:   "tasks",
-			Action:   "status_change",
+			Action:   "task_status_change",
+			EntityID: &result.ID,
 			OldValue: taskStatusAuditValue(oldValue),
 			NewValue: taskStatusAuditValue(result),
 		}); err != nil {
@@ -218,6 +221,7 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		UserID:   &actorID,
 		Module:   "tasks",
 		Action:   "delete",
+		EntityID: &id,
 		OldValue: oldValue,
 	}); err != nil {
 		return err

@@ -134,7 +134,7 @@ func main() {
 	taskmodule.RegisterRoutes(api, taskHandler, authMiddleware, appmiddleware.RequirePermission)
 	dashboardmodule.RegisterRoutes(api, dashboardHandler, authMiddleware, appmiddleware.RequirePermission)
 	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware, appmiddleware.RequirePermission)
-	auditmodule.RegisterRoutes(api, auditHandler, authMiddleware, appmiddleware.RequireRole("admin"))
+	auditmodule.RegisterRoutes(api, auditHandler, authMiddleware, appmiddleware.RequireRole("admin", "project_manager"))
 	notificationmodule.RegisterRoutes(api, notificationHandler, authMiddleware, appmiddleware.RequireRole)
 	workloadmodule.RegisterRoutes(api, workloadHandler, authMiddleware, appmiddleware.RequirePermission)
 
