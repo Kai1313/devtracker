@@ -66,11 +66,11 @@ func main() {
 
 	userService := usermodule.NewService(userRepository)
 	projectService := projectmodule.NewService(projectRepository)
-	sprintService := sprintmodule.NewService(sprintRepository, projectRepository)
 	statusService := statusmodule.NewService(statusRepository)
 	taskService := taskmodule.NewService(taskRepository, userRepository, projectRepository, sprintRepository, statusRepository)
 	dashboardService := dashboardmodule.NewService(dashboardRepository, sprintRepository)
 	kpiService := kpimodule.NewService(kpiRepository, sprintRepository)
+	sprintService := sprintmodule.NewService(sprintRepository, projectRepository, kpiService)
 	authService := auth.NewService(userRepository, cfg.JWT)
 	auditService := auditmodule.NewService(auditRepository)
 	notificationService := notificationmodule.NewService(notificationRepository)

@@ -21,15 +21,26 @@ const (
 )
 
 type Service struct {
-	repository Repository
-	projects   project.Repository
+	repository  Repository
+	projects    project.Repository
+	snapshotter KPISnapshotter
 }
 
-func NewService(repository Repository, projects project.Repository) *Service {
-	return &Service{
+type KPISnapshotter interface {
+	GenerateSprintSnapshots(ctx context.Context, sprintID uuid.UUID) error
+}
+
+func NewService(repository Repository, projects project.Repository, snapshotters ...KPISnapshotter) *Service {
+	service := &Service{
 		repository: repository,
 		projects:   projects,
 	}
+
+	if len(snapshotters) > 0 {
+		service.snapshotter = snapshotters[0]
+	}
+
+	return service
 }
 
 func (s *Service) List(ctx context.Context, filter ListSprintsQuery) ([]SprintResponse, map[string]any, error) {
@@ -168,6 +179,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateSprintRequ
 		current.EndDate = endDate
 	}
 
+	wasClosed := current.Status == StatusClosed
+
 	if req.Status != nil {
 		status, err := normalizeRequiredStatus(*req.Status)
 		if err != nil {
@@ -185,6 +198,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateSprintRequ
 		return nil, err
 	}
 
+	if !wasClosed && current.Status == StatusClosed {
+		if err := s.generateSnapshots(ctx, current.ID); err != nil {
+			return nil, err
+		}
+	}
+
 	response := NewResponse(*current)
 	return &response, nil
 }
@@ -199,10 +218,17 @@ func (s *Service) Close(ctx context.Context, id uuid.UUID) (*SprintResponse, err
 		return nil, err
 	}
 
+	wasClosed := current.Status == StatusClosed
 	current.Status = StatusClosed
 
 	if err := s.repository.Update(ctx, current); err != nil {
 		return nil, err
+	}
+
+	if !wasClosed {
+		if err := s.generateSnapshots(ctx, current.ID); err != nil {
+			return nil, err
+		}
 	}
 
 	response := NewResponse(*current)
@@ -215,6 +241,14 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return s.repository.Delete(ctx, id)
+}
+
+func (s *Service) generateSnapshots(ctx context.Context, sprintID uuid.UUID) error {
+	if s.snapshotter == nil {
+		return nil
+	}
+
+	return s.snapshotter.GenerateSprintSnapshots(ctx, sprintID)
 }
 
 func (s *Service) resolveProject(ctx context.Context, value string) (uuid.UUID, *project.Project, error) {

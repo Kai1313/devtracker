@@ -187,6 +187,7 @@ CREATE INDEX idx_tasks_developer_id ON tasks(developer_id);
 CREATE INDEX idx_tasks_status_id ON tasks(status_id);
 CREATE INDEX idx_task_histories_task_id ON task_histories(task_id);
 CREATE INDEX idx_kpi_snapshots_developer_sprint ON kpi_snapshots(developer_id, sprint_id);
+CREATE INDEX idx_kpi_snapshots_sprint_id ON kpi_snapshots(sprint_id);
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_module ON audit_logs(module);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);

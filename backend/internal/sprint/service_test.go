@@ -61,6 +61,69 @@ func TestSprintCRUD(t *testing.T) {
 	}
 }
 
+func TestSprintCloseGeneratesKPISnapshots(t *testing.T) {
+	projectID := uuid.New()
+	projectRepository := &fakeProjectRepository{
+		projects: map[uuid.UUID]*project.Project{
+			projectID: {ID: projectID, ProjectCode: "DEV", ProjectName: "Dev Tracker"},
+		},
+	}
+	sprintRepository := newFakeSprintRepository()
+	snapshotter := &fakeKPISnapshotter{}
+	service := NewService(sprintRepository, projectRepository, snapshotter)
+
+	created, err := service.Create(context.Background(), CreateSprintRequest{
+		ProjectID:  projectID.String(),
+		SprintName: "Sprint 1",
+		StartDate:  "2026-01-01",
+		EndDate:    "2026-01-14",
+		Status:     StatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create sprint: %v", err)
+	}
+
+	if _, err := service.Close(context.Background(), created.ID); err != nil {
+		t.Fatalf("close sprint: %v", err)
+	}
+
+	if len(snapshotter.sprintIDs) != 1 || snapshotter.sprintIDs[0] != created.ID {
+		t.Fatalf("expected snapshot for sprint %s, got %v", created.ID, snapshotter.sprintIDs)
+	}
+}
+
+func TestSprintUpdateToClosedGeneratesKPISnapshots(t *testing.T) {
+	projectID := uuid.New()
+	projectRepository := &fakeProjectRepository{
+		projects: map[uuid.UUID]*project.Project{
+			projectID: {ID: projectID, ProjectCode: "DEV", ProjectName: "Dev Tracker"},
+		},
+	}
+	sprintRepository := newFakeSprintRepository()
+	snapshotter := &fakeKPISnapshotter{}
+	service := NewService(sprintRepository, projectRepository, snapshotter)
+
+	created, err := service.Create(context.Background(), CreateSprintRequest{
+		ProjectID:  projectID.String(),
+		SprintName: "Sprint 1",
+		StartDate:  "2026-01-01",
+		EndDate:    "2026-01-14",
+		Status:     StatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create sprint: %v", err)
+	}
+
+	closed := StatusClosed
+	if _, err := service.Update(context.Background(), created.ID, UpdateSprintRequest{Status: &closed}); err != nil {
+		t.Fatalf("update sprint to closed: %v", err)
+	}
+
+	if len(snapshotter.sprintIDs) != 1 || snapshotter.sprintIDs[0] != created.ID {
+		t.Fatalf("expected snapshot for sprint %s, got %v", created.ID, snapshotter.sprintIDs)
+	}
+}
+
 type fakeSprintRepository struct {
 	sprints map[uuid.UUID]*Sprint
 	deleted map[uuid.UUID]bool
@@ -103,6 +166,15 @@ func (r *fakeSprintRepository) List(context.Context, ListSprintsQuery) ([]Sprint
 
 func (r *fakeSprintRepository) Update(_ context.Context, sprint *Sprint) error {
 	r.sprints[sprint.ID] = sprint
+	return nil
+}
+
+type fakeKPISnapshotter struct {
+	sprintIDs []uuid.UUID
+}
+
+func (s *fakeKPISnapshotter) GenerateSprintSnapshots(_ context.Context, sprintID uuid.UUID) error {
+	s.sprintIDs = append(s.sprintIDs, sprintID)
 	return nil
 }
 
