@@ -32,6 +32,15 @@ type Service struct {
 	statuses   status.Repository
 }
 
+type AccessScope struct {
+	UserID                 uuid.UUID
+	CanManageTasks         bool
+	CanViewAssignedTasks   bool
+	CanViewReadyToCheck    bool
+	CanUpdateOwnTaskStatus bool
+	CanUpdateQAStatus      bool
+}
+
 func NewService(
 	repository Repository,
 	users user.Repository,
@@ -49,15 +58,44 @@ func NewService(
 }
 
 func (s *Service) List(ctx context.Context, filter ListTasksQuery) ([]TaskResponse, map[string]any, error) {
-	filter.Page = normalizePage(filter.Page)
-	filter.Limit = normalizeLimit(filter.Limit)
-	filter.Search = strings.TrimSpace(filter.Search)
-
-	if err := normalizeFilterIDs(&filter); err != nil {
+	normalized, err := prepareListFilter(filter)
+	if err != nil {
 		return nil, nil, err
 	}
 
-	tasks, total, err := s.repository.List(ctx, filter)
+	return s.list(ctx, normalized, ListAccessFilter{})
+}
+
+func (s *Service) ListWithAccess(ctx context.Context, filter ListTasksQuery, scope AccessScope) ([]TaskResponse, map[string]any, error) {
+	normalized, err := prepareListFilter(filter)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if scope.CanManageTasks {
+		return s.list(ctx, normalized, ListAccessFilter{})
+	}
+
+	access, err := s.listAccessFilter(ctx, normalized, scope)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return s.list(ctx, normalized, access)
+}
+
+func (s *Service) list(ctx context.Context, filter ListTasksQuery, access ListAccessFilter) ([]TaskResponse, map[string]any, error) {
+	var (
+		tasks []Task
+		total int64
+		err   error
+	)
+
+	if access.IsZero() {
+		tasks, total, err = s.repository.List(ctx, filter)
+	} else {
+		tasks, total, err = s.repository.ListWithAccess(ctx, filter, access)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,6 +110,30 @@ func (s *Service) List(ctx context.Context, filter ListTasksQuery) ([]TaskRespon
 }
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*TaskResponse, error) {
+	current, err := s.findTask(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	response := NewResponse(*current)
+	return &response, nil
+}
+
+func (s *Service) GetWithAccess(ctx context.Context, id uuid.UUID, scope AccessScope) (*TaskResponse, error) {
+	current, err := s.findTask(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !canViewTask(current, scope) {
+		return nil, apperrors.Forbidden("insufficient permissions for this task")
+	}
+
+	response := NewResponse(*current)
+	return &response, nil
+}
+
+func (s *Service) findTask(ctx context.Context, id uuid.UUID) (*Task, error) {
 	current, err := s.repository.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -81,12 +143,24 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*TaskResponse, error) 
 		return nil, err
 	}
 
-	response := NewResponse(*current)
-	return &response, nil
+	return current, nil
 }
 
 func (s *Service) ListHistories(ctx context.Context, taskID uuid.UUID) ([]TaskHistoryResponse, error) {
 	if _, err := s.Get(ctx, taskID); err != nil {
+		return nil, err
+	}
+
+	histories, err := s.repository.ListHistories(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewHistoryResponses(histories), nil
+}
+
+func (s *Service) ListHistoriesWithAccess(ctx context.Context, taskID uuid.UUID, scope AccessScope) ([]TaskHistoryResponse, error) {
+	if _, err := s.GetWithAccess(ctx, taskID, scope); err != nil {
 		return nil, err
 	}
 
@@ -330,6 +404,48 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateTaskReques
 	return &response, nil
 }
 
+func (s *Service) UpdateWithAccess(ctx context.Context, id uuid.UUID, req UpdateTaskRequest, actorID uuid.UUID, scope AccessScope) (*TaskResponse, error) {
+	if scope.CanManageTasks {
+		return s.Update(ctx, id, req, actorID)
+	}
+
+	current, err := s.findTask(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isStatusOnlyUpdate(req) {
+		return nil, apperrors.Forbidden("only task status can be updated")
+	}
+
+	if req.StatusID == nil || strings.TrimSpace(*req.StatusID) == "" {
+		return nil, apperrors.BadRequest("status_id is required")
+	}
+
+	if scope.CanUpdateOwnTaskStatus && current.DeveloperID == scope.UserID {
+		return s.Update(ctx, id, req, actorID)
+	}
+
+	if scope.CanUpdateQAStatus {
+		if !isReadyToCheckStatus(&current.Status) && !isQAStatus(&current.Status) {
+			return nil, apperrors.Forbidden("QA can only update tasks in QA statuses")
+		}
+
+		nextStatus, err := s.resolveStatus(ctx, *req.StatusID)
+		if err != nil {
+			return nil, err
+		}
+
+		if !isQAStatus(nextStatus) {
+			return nil, apperrors.Forbidden("QA can only update QA-related statuses")
+		}
+
+		return s.Update(ctx, id, req, actorID)
+	}
+
+	return nil, apperrors.Forbidden("insufficient permissions for this task")
+}
+
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	if _, err := s.Get(ctx, id); err != nil {
 		return err
@@ -467,6 +583,57 @@ func newStatusHistory(taskID uuid.UUID, oldStatusID *uuid.UUID, newStatusID uuid
 	}
 }
 
+func prepareListFilter(filter ListTasksQuery) (ListTasksQuery, error) {
+	filter.Page = normalizePage(filter.Page)
+	filter.Limit = normalizeLimit(filter.Limit)
+	filter.Search = strings.TrimSpace(filter.Search)
+
+	if err := normalizeFilterIDs(&filter); err != nil {
+		return ListTasksQuery{}, err
+	}
+
+	return filter, nil
+}
+
+func (s *Service) listAccessFilter(ctx context.Context, filter ListTasksQuery, scope AccessScope) (ListAccessFilter, error) {
+	if scope.UserID == uuid.Nil {
+		return ListAccessFilter{}, apperrors.Forbidden("insufficient permissions")
+	}
+
+	access := ListAccessFilter{}
+
+	if scope.CanViewAssignedTasks {
+		access.DeveloperID = scope.UserID
+	}
+
+	if scope.CanViewReadyToCheck {
+		readyStatus, err := s.statuses.FindByName(ctx, "Ready to Check")
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ListAccessFilter{}, apperrors.NotFound("ready to check status not found")
+			}
+
+			return ListAccessFilter{}, err
+		}
+
+		access.ReadyToCheckStatusID = readyStatus.ID
+	}
+
+	if access.IsZero() {
+		return ListAccessFilter{}, apperrors.Forbidden("insufficient permissions")
+	}
+
+	if filter.DeveloperID != "" && access.DeveloperID != uuid.Nil && filter.DeveloperID != access.DeveloperID.String() && access.ReadyToCheckStatusID == uuid.Nil {
+		return ListAccessFilter{}, apperrors.Forbidden("developers can only view assigned tasks")
+	}
+
+	if filter.StatusID != "" && access.ReadyToCheckStatusID != uuid.Nil && filter.StatusID != access.ReadyToCheckStatusID.String() && access.DeveloperID == uuid.Nil {
+		return ListAccessFilter{}, apperrors.Forbidden("QA can only view tasks ready to check")
+	}
+
+	return access, nil
+}
+
 func normalizeFilterIDs(filter *ListTasksQuery) error {
 	normalized, err := normalizeOptionalUUID(filter.DeveloperID, "developer_id")
 	if err != nil {
@@ -585,6 +752,59 @@ func applyStatusChangeDates(taskStatus *status.TaskStatus, completedDate **time.
 	if statusName == "checked by qa" && *qaCheckedDate == nil {
 		*qaCheckedDate = &now
 	}
+}
+
+func canViewTask(task *Task, scope AccessScope) bool {
+	if scope.CanManageTasks {
+		return true
+	}
+
+	if scope.CanViewAssignedTasks && task.DeveloperID == scope.UserID {
+		return true
+	}
+
+	return scope.CanViewReadyToCheck && isReadyToCheckStatus(&task.Status)
+}
+
+func isStatusOnlyUpdate(req UpdateTaskRequest) bool {
+	return req.DeveloperID == nil &&
+		req.ProjectID == nil &&
+		req.SprintID == nil &&
+		req.TicketNumber == nil &&
+		req.TaskTitle == nil &&
+		req.TaskDescription == nil &&
+		req.Priority == nil &&
+		req.EstimatedPoint == nil &&
+		req.ActualPoint == nil &&
+		req.StartDate == nil &&
+		req.DueDate == nil &&
+		req.CompletedDate == nil &&
+		req.QACheckedDate == nil
+}
+
+func isReadyToCheckStatus(taskStatus *status.TaskStatus) bool {
+	if taskStatus == nil {
+		return false
+	}
+
+	return normalizeStatusName(taskStatus.StatusName) == "ready_to_check"
+}
+
+func isQAStatus(taskStatus *status.TaskStatus) bool {
+	if taskStatus == nil {
+		return false
+	}
+
+	statusName := normalizeStatusName(taskStatus.StatusName)
+	return taskStatus.IsQAStatus || statusName == "ready_to_check" || statusName == "checked_by_qa"
+}
+
+func normalizeStatusName(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+
+	return normalized
 }
 
 func normalizeText(value string) string {

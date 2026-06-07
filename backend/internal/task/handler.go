@@ -5,12 +5,14 @@ import (
 
 	"devtracker/backend/internal/audit"
 	"devtracker/backend/internal/httpx"
+	appmiddleware "devtracker/backend/internal/middleware"
 	"devtracker/backend/internal/notification"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
 	appvalidator "devtracker/backend/pkg/validator"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -24,6 +26,11 @@ func NewHandler(service *Service, auditService *audit.Service, notificationServi
 }
 
 func (h *Handler) List(c *fiber.Ctx) error {
+	scope, err := taskAccessScope(c)
+	if err != nil {
+		return err
+	}
+
 	query := ListTasksQuery{
 		Page:        c.QueryInt("page", 1),
 		Limit:       c.QueryInt("limit", 20),
@@ -34,7 +41,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		Search:      c.Query("search"),
 	}
 
-	result, meta, err := h.service.List(c.UserContext(), query)
+	result, meta, err := h.service.ListWithAccess(c.UserContext(), query, scope)
 	if err != nil {
 		return err
 	}
@@ -43,12 +50,17 @@ func (h *Handler) List(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Get(c *fiber.Ctx) error {
+	scope, err := taskAccessScope(c)
+	if err != nil {
+		return err
+	}
+
 	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
 
-	result, err := h.service.Get(c.UserContext(), id)
+	result, err := h.service.GetWithAccess(c.UserContext(), id, scope)
 	if err != nil {
 		return err
 	}
@@ -57,12 +69,17 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ListHistories(c *fiber.Ctx) error {
+	scope, err := taskAccessScope(c)
+	if err != nil {
+		return err
+	}
+
 	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
 		return err
 	}
 
-	result, err := h.service.ListHistories(c.UserContext(), id)
+	result, err := h.service.ListHistoriesWithAccess(c.UserContext(), id, scope)
 	if err != nil {
 		return err
 	}
@@ -111,6 +128,7 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	scope := taskAccessScopeForUser(c, actorID)
 
 	id, err := httpx.ParseUUIDParam(c, "id")
 	if err != nil {
@@ -131,7 +149,7 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return err
 	}
 
-	result, err := h.service.Update(c.UserContext(), id, req, actorID)
+	result, err := h.service.UpdateWithAccess(c.UserContext(), id, req, actorID, scope)
 	if err != nil {
 		return err
 	}
@@ -206,6 +224,26 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 	}
 
 	return response.OK(c, "task deleted", nil)
+}
+
+func taskAccessScope(c *fiber.Ctx) (AccessScope, error) {
+	userID, err := httpx.CurrentUserID(c)
+	if err != nil {
+		return AccessScope{}, err
+	}
+
+	return taskAccessScopeForUser(c, userID), nil
+}
+
+func taskAccessScopeForUser(c *fiber.Ctx, userID uuid.UUID) AccessScope {
+	return AccessScope{
+		UserID:                 userID,
+		CanManageTasks:         appmiddleware.HasPermission(c, "manage_tasks"),
+		CanViewAssignedTasks:   appmiddleware.HasPermission(c, "view_assigned_tasks"),
+		CanViewReadyToCheck:    appmiddleware.HasPermission(c, "view_ready_to_check_tasks"),
+		CanUpdateOwnTaskStatus: appmiddleware.HasPermission(c, "update_own_task_status"),
+		CanUpdateQAStatus:      appmiddleware.HasPermission(c, "update_qa_status"),
+	}
 }
 
 func taskStatusAuditValue(task *TaskResponse) map[string]any {

@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"devtracker/backend/internal/project"
@@ -140,6 +141,126 @@ func TestTaskAssignmentCRUDAndStatusHistory(t *testing.T) {
 	}
 }
 
+func TestTaskAccessScopeRestrictsDeveloperAndQA(t *testing.T) {
+	projectID := uuid.New()
+	sprintID := uuid.New()
+	developerID := uuid.New()
+	otherDeveloperID := uuid.New()
+	qaID := uuid.New()
+	readyStatusID := uuid.New()
+	todoStatusID := uuid.New()
+	checkedByQAStatusID := uuid.New()
+	doneStatusID := uuid.New()
+
+	projectModel := &project.Project{ID: projectID, ProjectCode: "DEV", ProjectName: "Dev Tracker"}
+	sprintModel := &sprint.Sprint{ID: sprintID, ProjectID: projectID, Project: *projectModel, SprintName: "Sprint 1"}
+	developerRole := user.Role{ID: uuid.New(), Name: "developer"}
+	developer := &user.User{
+		ID:       developerID,
+		RoleID:   developerRole.ID,
+		Role:     developerRole,
+		Name:     "Dev User",
+		Email:    "dev@example.com",
+		IsActive: true,
+	}
+	otherDeveloper := &user.User{
+		ID:       otherDeveloperID,
+		RoleID:   developerRole.ID,
+		Role:     developerRole,
+		Name:     "Other Dev",
+		Email:    "other@example.com",
+		IsActive: true,
+	}
+
+	readyStatus := &status.TaskStatus{ID: readyStatusID, StatusName: "Ready to Check", ColorName: "blue", ColorHex: "#3B82F6", IsQAStatus: true, IsActive: true}
+	todoStatus := &status.TaskStatus{ID: todoStatusID, StatusName: "Todo", ColorName: "gray", ColorHex: "#6B7280", IsActive: true}
+	checkedByQAStatus := &status.TaskStatus{ID: checkedByQAStatusID, StatusName: "Checked by QA", ColorName: "orange", ColorHex: "#F97316", IsQAStatus: true, IsActive: true}
+	doneStatus := &status.TaskStatus{ID: doneStatusID, StatusName: "Done", ColorName: "green", ColorHex: "#22C55E", IsDone: true, IsActive: true}
+
+	taskRepository := newFakeTaskRepository()
+	readyTask := &Task{
+		ID:          uuid.New(),
+		ProjectID:   projectID,
+		Project:     *projectModel,
+		SprintID:    sprintID,
+		Sprint:      *sprintModel,
+		DeveloperID: developerID,
+		Developer:   *developer,
+		StatusID:    readyStatusID,
+		Status:      *readyStatus,
+		TaskTitle:   "Ready task",
+		Priority:    PriorityMedium,
+	}
+	otherTask := &Task{
+		ID:          uuid.New(),
+		ProjectID:   projectID,
+		Project:     *projectModel,
+		SprintID:    sprintID,
+		Sprint:      *sprintModel,
+		DeveloperID: otherDeveloperID,
+		Developer:   *otherDeveloper,
+		StatusID:    todoStatusID,
+		Status:      *todoStatus,
+		TaskTitle:   "Other task",
+		Priority:    PriorityMedium,
+	}
+	taskRepository.tasks[readyTask.ID] = readyTask
+	taskRepository.tasks[otherTask.ID] = otherTask
+
+	service := NewService(
+		taskRepository,
+		&fakeUserRepository{users: map[uuid.UUID]*user.User{
+			developerID:      developer,
+			otherDeveloperID: otherDeveloper,
+		}},
+		&fakeProjectRepository{projects: map[uuid.UUID]*project.Project{projectID: projectModel}},
+		&fakeSprintRepository{sprints: map[uuid.UUID]*sprint.Sprint{sprintID: sprintModel}},
+		&fakeStatusRepository{statuses: map[uuid.UUID]*status.TaskStatus{
+			readyStatusID:       readyStatus,
+			todoStatusID:        todoStatus,
+			checkedByQAStatusID: checkedByQAStatus,
+			doneStatusID:        doneStatus,
+		}},
+	)
+
+	developerScope := AccessScope{UserID: developerID, CanViewAssignedTasks: true, CanUpdateOwnTaskStatus: true}
+	developerTasks, meta, err := service.ListWithAccess(context.Background(), ListTasksQuery{Page: 1, Limit: 10}, developerScope)
+	if err != nil {
+		t.Fatalf("developer scoped list: %v", err)
+	}
+	if len(developerTasks) != 1 || meta["total"].(int64) != 1 || developerTasks[0].ID != readyTask.ID {
+		t.Fatalf("expected developer to see only assigned task, got tasks=%v meta=%v", developerTasks, meta)
+	}
+
+	if _, err := service.GetWithAccess(context.Background(), otherTask.ID, developerScope); err == nil {
+		t.Fatal("expected developer to be forbidden from viewing another developer task")
+	}
+
+	renamed := "Renamed"
+	if _, err := service.UpdateWithAccess(context.Background(), readyTask.ID, UpdateTaskRequest{TaskTitle: &renamed}, developerID, developerScope); err == nil {
+		t.Fatal("expected developer non-status update to be forbidden")
+	}
+
+	qaScope := AccessScope{UserID: qaID, CanViewReadyToCheck: true, CanUpdateQAStatus: true}
+	qaTasks, _, err := service.ListWithAccess(context.Background(), ListTasksQuery{Page: 1, Limit: 10}, qaScope)
+	if err != nil {
+		t.Fatalf("QA scoped list: %v", err)
+	}
+	if len(qaTasks) != 1 || qaTasks[0].ID != readyTask.ID {
+		t.Fatalf("expected QA to see ready-to-check task only, got %v", qaTasks)
+	}
+
+	checkedID := checkedByQAStatusID.String()
+	if _, err := service.UpdateWithAccess(context.Background(), readyTask.ID, UpdateTaskRequest{StatusID: &checkedID}, qaID, qaScope); err != nil {
+		t.Fatalf("expected QA status update to be allowed: %v", err)
+	}
+
+	doneID := doneStatusID.String()
+	if _, err := service.UpdateWithAccess(context.Background(), readyTask.ID, UpdateTaskRequest{StatusID: &doneID}, qaID, qaScope); err == nil {
+		t.Fatal("expected QA update to non-QA status to be forbidden")
+	}
+}
+
 type fakeTaskRepository struct {
 	tasks     map[uuid.UUID]*Task
 	histories []TaskHistory
@@ -174,14 +295,52 @@ func (r *fakeTaskRepository) FindByID(_ context.Context, id uuid.UUID) (*Task, e
 	return task, nil
 }
 
-func (r *fakeTaskRepository) List(context.Context, ListTasksQuery) ([]Task, int64, error) {
+func (r *fakeTaskRepository) List(_ context.Context, filter ListTasksQuery) ([]Task, int64, error) {
+	return r.list(filter, ListAccessFilter{})
+}
+
+func (r *fakeTaskRepository) ListWithAccess(_ context.Context, filter ListTasksQuery, access ListAccessFilter) ([]Task, int64, error) {
+	return r.list(filter, access)
+}
+
+func (r *fakeTaskRepository) list(filter ListTasksQuery, access ListAccessFilter) ([]Task, int64, error) {
 	tasks := make([]Task, 0, len(r.tasks))
 	for id, task := range r.tasks {
-		if !r.deleted[id] {
-			tasks = append(tasks, *task)
+		if r.deleted[id] {
+			continue
 		}
+
+		if !access.IsZero() && !fakeTaskMatchesAccess(task, access) {
+			continue
+		}
+
+		if filter.DeveloperID != "" && task.DeveloperID.String() != filter.DeveloperID {
+			continue
+		}
+
+		if filter.ProjectID != "" && task.ProjectID.String() != filter.ProjectID {
+			continue
+		}
+
+		if filter.SprintID != "" && task.SprintID.String() != filter.SprintID {
+			continue
+		}
+
+		if filter.StatusID != "" && task.StatusID.String() != filter.StatusID {
+			continue
+		}
+
+		tasks = append(tasks, *task)
 	}
 	return tasks, int64(len(tasks)), nil
+}
+
+func fakeTaskMatchesAccess(task *Task, access ListAccessFilter) bool {
+	if access.DeveloperID != uuid.Nil && task.DeveloperID == access.DeveloperID {
+		return true
+	}
+
+	return access.ReadyToCheckStatusID != uuid.Nil && task.StatusID == access.ReadyToCheckStatusID
 }
 
 func (r *fakeTaskRepository) ListHistories(_ context.Context, taskID uuid.UUID) ([]TaskHistory, error) {
@@ -334,7 +493,13 @@ func (r *fakeStatusRepository) FindByID(_ context.Context, id uuid.UUID) (*statu
 	return taskStatus, nil
 }
 
-func (r *fakeStatusRepository) FindByName(context.Context, string) (*status.TaskStatus, error) {
+func (r *fakeStatusRepository) FindByName(_ context.Context, name string) (*status.TaskStatus, error) {
+	for _, taskStatus := range r.statuses {
+		if strings.EqualFold(taskStatus.StatusName, name) {
+			return taskStatus, nil
+		}
+	}
+
 	return nil, gorm.ErrRecordNotFound
 }
 

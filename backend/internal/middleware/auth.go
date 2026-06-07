@@ -60,22 +60,9 @@ func JWTAuth(cfg config.JWTConfig, users user.Repository) fiber.Handler {
 }
 
 func RequireRole(roles ...string) fiber.Handler {
-	allowed := normalizeSet(roles...)
-
 	return func(c *fiber.Ctx) error {
-		currentRoles := localSet(c, httpx.LocalRoles)
-		if len(currentRoles) == 0 {
-			currentRoles = normalizeSet(localString(c, httpx.LocalRole))
-		}
-
-		if _, ok := currentRoles["admin"]; ok {
+		if HasRole(c, roles...) {
 			return c.Next()
-		}
-
-		for role := range allowed {
-			if _, ok := currentRoles[role]; ok {
-				return c.Next()
-			}
 		}
 
 		return apperrors.Forbidden("insufficient permissions")
@@ -87,27 +74,54 @@ func RequireRoles(roles ...string) fiber.Handler {
 }
 
 func RequirePermission(permissions ...string) fiber.Handler {
-	required := normalizeSet(permissions...)
-
 	return func(c *fiber.Ctx) error {
-		currentRoles := localSet(c, httpx.LocalRoles)
-		if len(currentRoles) == 0 {
-			currentRoles = normalizeSet(localString(c, httpx.LocalRole))
-		}
-
-		if _, ok := currentRoles["admin"]; ok {
+		if HasPermission(c, permissions...) {
 			return c.Next()
-		}
-
-		currentPermissions := localSet(c, httpx.LocalPermissions)
-		for permission := range required {
-			if _, ok := currentPermissions[permission]; ok {
-				return c.Next()
-			}
 		}
 
 		return apperrors.Forbidden("insufficient permissions")
 	}
+}
+
+func HasRole(c *fiber.Ctx, roles ...string) bool {
+	allowed := normalizeSet(roles...)
+	currentRoles := localSet(c, httpx.LocalRoles)
+	if len(currentRoles) == 0 {
+		currentRoles = normalizeSet(localString(c, httpx.LocalRole))
+	}
+
+	if _, ok := currentRoles["admin"]; ok {
+		return true
+	}
+
+	for role := range allowed {
+		if _, ok := currentRoles[role]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func HasPermission(c *fiber.Ctx, permissions ...string) bool {
+	required := normalizeSet(permissions...)
+	currentRoles := localSet(c, httpx.LocalRoles)
+	if len(currentRoles) == 0 {
+		currentRoles = normalizeSet(localString(c, httpx.LocalRole))
+	}
+
+	if _, ok := currentRoles["admin"]; ok {
+		return true
+	}
+
+	currentPermissions := localSet(c, httpx.LocalPermissions)
+	for permission := range required {
+		if _, ok := currentPermissions[permission]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 func bearerToken(c *fiber.Ctx) string {
@@ -188,5 +202,9 @@ func setValues(set map[string]struct{}) []string {
 }
 
 func normalize(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+
+	return normalized
 }

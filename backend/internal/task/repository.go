@@ -13,6 +13,7 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Task, error)
 	List(ctx context.Context, filter ListTasksQuery) ([]Task, int64, error)
+	ListWithAccess(ctx context.Context, filter ListTasksQuery, access ListAccessFilter) ([]Task, int64, error)
 	ListHistories(ctx context.Context, taskID uuid.UUID) ([]TaskHistory, error)
 	Update(ctx context.Context, task *Task, history *TaskHistory) error
 }
@@ -75,7 +76,19 @@ func (r *repository) FindByID(ctx context.Context, id uuid.UUID) (*Task, error) 
 }
 
 func (r *repository) List(ctx context.Context, filter ListTasksQuery) ([]Task, int64, error) {
+	return r.list(ctx, filter, ListAccessFilter{})
+}
+
+func (r *repository) ListWithAccess(ctx context.Context, filter ListTasksQuery, access ListAccessFilter) ([]Task, int64, error) {
+	return r.list(ctx, filter, access)
+}
+
+func (r *repository) list(ctx context.Context, filter ListTasksQuery, access ListAccessFilter) ([]Task, int64, error) {
 	query := withTaskPreloads(r.db.WithContext(ctx).Model(&Task{}))
+
+	if !access.IsZero() {
+		query = applyAccessFilter(query, access)
+	}
 
 	if filter.DeveloperID != "" {
 		query = query.Where("developer_id = ?", filter.DeveloperID)
@@ -113,6 +126,22 @@ func (r *repository) List(ctx context.Context, filter ListTasksQuery) ([]Task, i
 		Error
 
 	return tasks, total, err
+}
+
+func applyAccessFilter(query *gorm.DB, access ListAccessFilter) *gorm.DB {
+	if access.DeveloperID != uuid.Nil && access.ReadyToCheckStatusID != uuid.Nil {
+		return query.Where(
+			"(developer_id = ? OR status_id = ?)",
+			access.DeveloperID,
+			access.ReadyToCheckStatusID,
+		)
+	}
+
+	if access.DeveloperID != uuid.Nil {
+		return query.Where("developer_id = ?", access.DeveloperID)
+	}
+
+	return query.Where("status_id = ?", access.ReadyToCheckStatusID)
 }
 
 func (r *repository) ListHistories(ctx context.Context, taskID uuid.UUID) ([]TaskHistory, error) {

@@ -65,6 +65,19 @@ func TestRequireRoleAllowsMatchingRole(t *testing.T) {
 	}
 }
 
+func TestRequireRoleNormalizesDisplayName(t *testing.T) {
+	app := testRBACApp(func(c *fiber.Ctx) error {
+		c.Locals(httpx.LocalRoles, []string{"project_manager"})
+		return c.Next()
+	})
+	app.Get("/", RequireRole("Project Manager"), noContent)
+
+	resp := performRequest(t, app)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, resp.StatusCode)
+	}
+}
+
 func TestRequireRoleAllowsAdminBypass(t *testing.T) {
 	app := testRBACApp(func(c *fiber.Ctx) error {
 		c.Locals(httpx.LocalRole, "admin")

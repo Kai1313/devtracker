@@ -1,28 +1,3 @@
-CREATE TABLE IF NOT EXISTS permissions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS role_permissions (
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (role_id, permission_id)
-);
-
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (user_id, role_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permissions(permission_id);
-CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id);
-
 INSERT INTO roles (name, description) VALUES
 ('admin', 'System administrator'),
 ('project_manager', 'Project manager'),
@@ -47,6 +22,11 @@ INSERT INTO permissions (name, description) VALUES
 ('view_reports', 'View reports')
 ON CONFLICT (name) DO UPDATE SET
 description = EXCLUDED.description;
+
+DELETE FROM role_permissions
+USING roles
+WHERE role_permissions.role_id = roles.id
+AND roles.name IN ('admin', 'project_manager', 'developer', 'qa', 'management');
 
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT roles.id, permissions.id

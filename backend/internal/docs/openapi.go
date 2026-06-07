@@ -196,7 +196,7 @@ func paths() map[string]any {
 		},
 		"/statuses/{id}": crudPath("Task Statuses", "task status", "TaskStatus", "UpdateTaskStatusRequest", map[string]any{"color_hex": "#3B82F6", "is_active": true}),
 		"/tasks": map[string]any{
-			"get": operation([]string{"Tasks"}, "List tasks", "Lists tasks. Requires `manage_tasks` or `view_assigned_tasks` permission.", true, append(pageParams(), queryParam("developer_id", "string", "Filter by developer UUID", idExample()), queryParam("project_id", "string", "Filter by project UUID", idExample()), queryParam("sprint_id", "string", "Filter by sprint UUID", idExample()), queryParam("status_id", "string", "Filter by status UUID", idExample()), queryParam("search", "string", "Search by ticket_number or task_title", "DEV-1")), nil, map[string]any{
+			"get": operation([]string{"Tasks"}, "List tasks", "Lists tasks. Requires `manage_tasks`, `view_assigned_tasks`, or `view_ready_to_check_tasks` permission. Developer results are scoped to assigned tasks; QA results are scoped to Ready to Check tasks.", true, append(pageParams(), queryParam("developer_id", "string", "Filter by developer UUID", idExample()), queryParam("project_id", "string", "Filter by project UUID", idExample()), queryParam("sprint_id", "string", "Filter by sprint UUID", idExample()), queryParam("status_id", "string", "Filter by status UUID", idExample()), queryParam("search", "string", "Search by ticket_number or task_title", "DEV-1")), nil, map[string]any{
 				"200": listResponse("tasks retrieved", arrayOf(ref("Task")), example("tasks retrieved", []any{taskExample()})),
 			}),
 			"post": operation([]string{"Tasks"}, "Create task", "Creates and assigns a task. Requires `manage_tasks` permission.", true, nil, request("CreateTaskRequest", taskRequestExample()), map[string]any{
@@ -204,9 +204,23 @@ func paths() map[string]any {
 				"422": validationErrorResponse(),
 			}),
 		},
-		"/tasks/{id}": crudPath("Tasks", "task", "Task", "UpdateTaskRequest", map[string]any{"status_id": idExample(), "actual_point": 5, "note": "Moved to QA"}),
+		"/tasks/{id}": map[string]any{
+			"get": operation([]string{"Tasks"}, "Get task", "Returns one task by UUID. Requires `manage_tasks`, `view_assigned_tasks`, or `view_ready_to_check_tasks` permission. Developer and QA access is scoped.", true, []any{pathIDParam()}, nil, map[string]any{
+				"200": response("task retrieved", ref("Task"), example("task retrieved", taskExample())),
+				"404": errorResponse("task not found"),
+			}),
+			"patch": operation([]string{"Tasks"}, "Update task", "Updates one task by UUID. Requires `manage_tasks` for full updates, `update_own_task_status` for developer status-only updates on assigned tasks, or `update_qa_status` for QA status-only updates to QA statuses.", true, []any{pathIDParam()}, request("UpdateTaskRequest", map[string]any{"status_id": idExample(), "actual_point": 5, "note": "Moved to QA"}), map[string]any{
+				"200": response("task updated", ref("Task"), example("task updated", taskExample())),
+				"404": errorResponse("task not found"),
+				"422": validationErrorResponse(),
+			}),
+			"delete": operation([]string{"Tasks"}, "Delete task", "Deletes one task by UUID. Requires `manage_tasks` permission.", true, []any{pathIDParam()}, nil, map[string]any{
+				"200": response("task deleted", nil, example("task deleted", nil)),
+				"404": errorResponse("task not found"),
+			}),
+		},
 		"/tasks/{id}/histories": map[string]any{
-			"get": operation([]string{"Tasks"}, "List task histories", "Lists status-change history for a task.", true, []any{pathIDParam()}, nil, map[string]any{
+			"get": operation([]string{"Tasks"}, "List task histories", "Lists status-change history for a task. Uses the same scoped task-view rule as task detail.", true, []any{pathIDParam()}, nil, map[string]any{
 				"200": response("task histories retrieved", arrayOf(ref("TaskHistory")), example("task histories retrieved", []any{taskHistoryExample()})),
 				"404": errorResponse("task not found"),
 			}),

@@ -57,6 +57,15 @@ type ListTasksQuery struct {
 	Search      string
 }
 
+type ListAccessFilter struct {
+	DeveloperID          uuid.UUID
+	ReadyToCheckStatusID uuid.UUID
+}
+
+func (f ListAccessFilter) IsZero() bool {
+	return f.DeveloperID == uuid.Nil && f.ReadyToCheckStatusID == uuid.Nil
+}
+
 type TaskResponse struct {
 	ID              uuid.UUID                 `json:"id"`
 	DeveloperID     uuid.UUID                 `json:"developer_id"`

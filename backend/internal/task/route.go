@@ -4,7 +4,7 @@ import "github.com/gofiber/fiber/v2"
 
 func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.Handler, requirePermission func(...string) fiber.Handler) {
 	group := router.Group("/tasks", authMiddleware)
-	canView := requirePermission("manage_tasks", "view_assigned_tasks")
+	canView := requirePermission("manage_tasks", "view_assigned_tasks", "view_ready_to_check_tasks")
 	canUpdate := requirePermission("manage_tasks", "update_own_task_status", "update_qa_status")
 	canManage := requirePermission("manage_tasks")
 

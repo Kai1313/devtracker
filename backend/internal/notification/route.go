@@ -2,8 +2,12 @@ package notification
 
 import "github.com/gofiber/fiber/v2"
 
-func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.Handler) {
-	group := router.Group("/notifications", authMiddleware)
+func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.Handler, requireRole func(...string) fiber.Handler) {
+	group := router.Group(
+		"/notifications",
+		authMiddleware,
+		requireRole("admin", "project_manager", "developer", "qa", "management"),
+	)
 
 	// @Summary List notifications
 	// @Tags Notifications

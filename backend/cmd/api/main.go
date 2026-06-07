@@ -135,7 +135,7 @@ func main() {
 	dashboardmodule.RegisterRoutes(api, dashboardHandler, authMiddleware, appmiddleware.RequirePermission)
 	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware, appmiddleware.RequirePermission)
 	auditmodule.RegisterRoutes(api, auditHandler, authMiddleware, appmiddleware.RequireRole("admin"))
-	notificationmodule.RegisterRoutes(api, notificationHandler, authMiddleware)
+	notificationmodule.RegisterRoutes(api, notificationHandler, authMiddleware, appmiddleware.RequireRole)
 	workloadmodule.RegisterRoutes(api, workloadHandler, authMiddleware, appmiddleware.RequirePermission)
 
 	serverErr := make(chan error, 1)
