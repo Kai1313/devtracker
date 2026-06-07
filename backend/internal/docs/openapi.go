@@ -14,6 +14,12 @@ func RegisterRoutes(app *fiber.App, basePath string) {
 	app.Get("/swagger/doc.json", func(c *fiber.Ctx) error {
 		return c.JSON(spec)
 	})
+	app.Get("/swagger/*", func(c *fiber.Ctx) error {
+		if strings.Trim(c.Params("*"), "/") == "doc.json" {
+			return c.JSON(spec)
+		}
+		return swaggerUI(c)
+	})
 }
 
 func swaggerUI(c *fiber.Ctx) error {
@@ -65,15 +71,19 @@ func Spec(basePath string) map[string]any {
 			tag("Projects", "Project CRUD"),
 			tag("Sprints", "Sprint CRUD and close workflow"),
 			tag("Task Statuses", "Task status configuration"),
-			tag("Tasks", "Task assignment, status changes, and history"),
+			tag("Tasks", "Task assignment and status changes"),
+			tag("Task Histories", "Task status-change histories"),
 			tag("Dashboard", "Dashboard summary APIs"),
 			tag("KPI", "Developer and project KPI APIs"),
+			tag("KPI Snapshots", "Stored KPI reports for closed sprints"),
 			tag("Audit Logs", "Audit trail. Admin can view all logs; Project Manager can view task, project, and sprint logs only."),
 			tag("Notifications", "Database notifications"),
 			tag("Workload", "Developer workload API"),
+			tag("RBAC", "Default roles and permissions applied by route middleware"),
 		},
 		"paths":      paths(),
 		"components": components(),
+		"x-rbac":     rbacPolicy(),
 	}
 }
 
@@ -94,7 +104,7 @@ func paths() map[string]any {
 			}),
 		},
 		"/auth/logout": map[string]any{
-			"post": operation([]string{"Auth"}, "Logout", "Logs out the authenticated user. JWT tokens are stateless; clients should discard the token.", true, nil, nil, map[string]any{
+			"post": operation([]string{"Auth"}, "Logout", "Logs out the authenticated user. Any authenticated active user can call this endpoint. JWT tokens are stateless; clients should discard the token.", true, nil, nil, map[string]any{
 				"200": response("logout successful", nil, example("logout successful", nil)),
 				"401": errorResponse("missing bearer token"),
 			}),
@@ -110,7 +120,7 @@ func paths() map[string]any {
 			}),
 		},
 		"/auth/me": map[string]any{
-			"get": operation([]string{"Auth"}, "Current user", "Returns the authenticated user profile. Authentication example: `Authorization: Bearer eyJ...`.", true, nil, nil, map[string]any{
+			"get": operation([]string{"Auth"}, "Current user", "Returns the authenticated user profile. Any authenticated active user can call this endpoint. Authentication example: `Authorization: Bearer eyJ...`.", true, nil, nil, map[string]any{
 				"200": response("current user retrieved", ref("User"), example("current user retrieved", userExample())),
 				"401": errorResponse("authenticated user is missing"),
 			}),
@@ -220,7 +230,7 @@ func paths() map[string]any {
 			}),
 		},
 		"/tasks/{id}/histories": map[string]any{
-			"get": operation([]string{"Tasks"}, "List task histories", "Lists status-change history for a task. Uses the same scoped task-view rule as task detail.", true, []any{pathIDParam()}, nil, map[string]any{
+			"get": operation([]string{"Task Histories"}, "List task histories", "Lists status-change history for a task. Uses the same scoped task-view rule as task detail.", true, []any{pathIDParam()}, nil, map[string]any{
 				"200": response("task histories retrieved", arrayOf(ref("TaskHistory")), example("task histories retrieved", []any{taskHistoryExample()})),
 				"404": errorResponse("task not found"),
 			}),
@@ -231,27 +241,27 @@ func paths() map[string]any {
 			}),
 		},
 		"/kpi/developers": map[string]any{
-			"get": operation([]string{"KPI"}, "Developer KPI", "Returns developer KPI. Closed sprints use KPI snapshots.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
+			"get": operation([]string{"KPI"}, "Developer KPI", "Returns developer KPI. Closed sprints use KPI snapshots. Requires `view_kpi` permission.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
 				"200": response("developer KPI retrieved", arrayOf(ref("DeveloperKPI")), example("developer KPI retrieved", []any{developerKPIExample()})),
 			}),
 		},
 		"/kpi/projects": map[string]any{
-			"get": operation([]string{"KPI"}, "Project KPI", "Returns project KPI. Closed sprints use KPI snapshots.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
+			"get": operation([]string{"KPI"}, "Project KPI", "Returns project KPI. Closed sprints use KPI snapshots. Requires `view_kpi` permission.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
 				"200": response("project KPI retrieved", arrayOf(ref("ProjectKPI")), example("project KPI retrieved", []any{projectKPIExample()})),
 			}),
 		},
 		"/kpi/snapshots": map[string]any{
-			"get": operation([]string{"KPI"}, "List KPI snapshots", "Lists KPI snapshots. Admin, Project Manager, and Management can view all snapshots; Developer results are scoped to their own developer ID.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
+			"get": operation([]string{"KPI Snapshots"}, "List KPI snapshots", "Lists KPI snapshots. Admin, Project Manager, and Management can view all snapshots; Developer results are scoped to their own developer ID.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
 				"200": response("KPI snapshots retrieved", arrayOf(ref("KPISnapshot")), example("KPI snapshots retrieved", []any{kpiSnapshotExample()})),
 			}),
 		},
 		"/kpi/snapshots/developer/{developer_id}": map[string]any{
-			"get": operation([]string{"KPI"}, "Developer KPI snapshots", "Lists KPI snapshots for one developer. Developers can only request their own ID.", true, []any{pathParam("developer_id", "Developer UUID", idExample())}, nil, map[string]any{
+			"get": operation([]string{"KPI Snapshots"}, "Developer KPI snapshots", "Lists KPI snapshots for one developer. Developers can only request their own ID.", true, []any{pathParam("developer_id", "Developer UUID", idExample())}, nil, map[string]any{
 				"200": response("developer KPI snapshots retrieved", arrayOf(ref("KPISnapshot")), example("developer KPI snapshots retrieved", []any{kpiSnapshotExample()})),
 			}),
 		},
 		"/kpi/snapshots/generate/{sprint_id}": map[string]any{
-			"post": operation([]string{"KPI"}, "Generate KPI snapshots", "Generates or refreshes one KPI snapshot per developer for a closed sprint. Admin and Project Manager only.", true, []any{pathParam("sprint_id", "Sprint UUID", idExample())}, nil, map[string]any{
+			"post": operation([]string{"KPI Snapshots"}, "Generate KPI snapshots", "Generates or refreshes one KPI snapshot per developer for a closed sprint. Admin and Project Manager only.", true, []any{pathParam("sprint_id", "Sprint UUID", idExample())}, nil, map[string]any{
 				"200": response("KPI snapshots generated", arrayOf(ref("KPISnapshot")), example("KPI snapshots generated", []any{kpiSnapshotExample()})),
 			}),
 		},
@@ -262,22 +272,22 @@ func paths() map[string]any {
 			}),
 		},
 		"/notifications": map[string]any{
-			"get": operation([]string{"Notifications"}, "List notifications", "Lists notifications for the authenticated user and returns unread count. Admin can see all notifications.", true, pageParams(), nil, map[string]any{
+			"get": operation([]string{"Notifications"}, "List notifications", "Lists notifications for the authenticated user and returns unread count. Admin can see all notifications; all other authenticated roles are scoped to their own notifications.", true, pageParams(), nil, map[string]any{
 				"200": listResponse("notifications retrieved", ref("NotificationList"), example("notifications retrieved", notificationListExample())),
 			}),
 		},
 		"/notifications/unread-count": map[string]any{
-			"get": operation([]string{"Notifications"}, "Notification unread count", "Returns unread notification count. Admin gets the global unread count.", true, nil, nil, map[string]any{
+			"get": operation([]string{"Notifications"}, "Notification unread count", "Returns unread notification count. Admin gets the global unread count; all other authenticated roles get their own count.", true, nil, nil, map[string]any{
 				"200": response("notification unread count retrieved", ref("NotificationUnreadCount"), example("notification unread count retrieved", map[string]any{"unread_count": 1})),
 			}),
 		},
 		"/notifications/read-all": map[string]any{
-			"patch": operation([]string{"Notifications"}, "Mark all notifications read", "Marks all visible notifications as read. Admin marks all notifications; other users mark only their own.", true, nil, nil, map[string]any{
+			"patch": operation([]string{"Notifications"}, "Mark all notifications read", "Marks all visible notifications as read. Admin marks all notifications; all other authenticated roles mark only their own.", true, nil, nil, map[string]any{
 				"200": response("notifications marked as read", ref("NotificationReadAll"), example("notifications marked as read", map[string]any{"read_count": 3, "unread_count": 0})),
 			}),
 		},
 		"/notifications/{id}/read": map[string]any{
-			"patch": operation([]string{"Notifications"}, "Mark notification read", "Marks one notification as read for the authenticated user.", true, []any{pathIDParam()}, nil, map[string]any{
+			"patch": operation([]string{"Notifications"}, "Mark notification read", "Marks one notification as read. Admin can mark any notification; all other authenticated roles are scoped to their own notifications.", true, []any{pathIDParam()}, nil, map[string]any{
 				"200": response("notification marked as read", ref("NotificationRead"), example("notification marked as read", notificationReadExample())),
 				"404": errorResponse("notification not found"),
 			}),
@@ -298,17 +308,18 @@ func paths() map[string]any {
 }
 
 func crudPath(tagName, noun, schemaName, updateSchema string, updateExample map[string]any) map[string]any {
+	roleNote := permissionNoteForTag(tagName)
 	return map[string]any{
-		"get": operation([]string{tagName}, "Get "+noun, "Returns one "+noun+" by UUID.", true, []any{pathIDParam()}, nil, map[string]any{
+		"get": operation([]string{tagName}, "Get "+noun, sentenceWithNote("Returns one "+noun+" by UUID.", roleNote), true, []any{pathIDParam()}, nil, map[string]any{
 			"200": response(noun+" retrieved", ref(schemaName), example(noun+" retrieved", sampleFor(schemaName))),
 			"404": errorResponse(noun + " not found"),
 		}),
-		"patch": operation([]string{tagName}, "Update "+noun, "Updates one "+noun+" by UUID.", true, []any{pathIDParam()}, request(updateSchema, updateExample), map[string]any{
+		"patch": operation([]string{tagName}, "Update "+noun, sentenceWithNote("Updates one "+noun+" by UUID.", roleNote), true, []any{pathIDParam()}, request(updateSchema, updateExample), map[string]any{
 			"200": response(noun+" updated", ref(schemaName), example(noun+" updated", sampleFor(schemaName))),
 			"404": errorResponse(noun + " not found"),
 			"422": validationErrorResponse(),
 		}),
-		"delete": operation([]string{tagName}, "Delete "+noun, "Deletes one "+noun+" by UUID.", true, []any{pathIDParam()}, nil, map[string]any{
+		"delete": operation([]string{tagName}, "Delete "+noun, sentenceWithNote("Deletes one "+noun+" by UUID.", roleNote), true, []any{pathIDParam()}, nil, map[string]any{
 			"200": response(noun+" deleted", nil, example(noun+" deleted", nil)),
 			"404": errorResponse(noun + " not found"),
 		}),
@@ -316,6 +327,15 @@ func crudPath(tagName, noun, schemaName, updateSchema string, updateExample map[
 }
 
 func operation(tags []string, summary, description string, protected bool, params []any, requestBody map[string]any, responses map[string]any) map[string]any {
+	if protected {
+		if _, ok := responses["401"]; !ok {
+			responses["401"] = errorResponseWithCode("missing bearer token", "unauthorized")
+		}
+		if _, ok := responses["403"]; !ok {
+			responses["403"] = errorResponseWithCode("insufficient permissions", "forbidden")
+		}
+	}
+
 	result := map[string]any{
 		"tags":        tags,
 		"summary":     summary,
@@ -334,6 +354,28 @@ func operation(tags []string, summary, description string, protected bool, param
 	}
 
 	return result
+}
+
+func permissionNoteForTag(tagName string) string {
+	switch tagName {
+	case "Users":
+		return "Requires `manage_users` permission."
+	case "Projects":
+		return "Requires `manage_projects` permission."
+	case "Sprints":
+		return "Requires `manage_sprints` permission."
+	case "Task Statuses":
+		return "Requires `manage_task_statuses` permission."
+	default:
+		return ""
+	}
+}
+
+func sentenceWithNote(sentence, note string) string {
+	if note == "" {
+		return sentence
+	}
+	return sentence + " " + note
 }
 
 func components() map[string]any {
@@ -355,6 +397,8 @@ func schemas() map[string]any {
 		"HealthResponse":        object(nil, props("app", str(), "env", str())),
 		"LoginRequest":          object([]string{"email", "password"}, props("email", str(), "password", str())),
 		"PaginationMeta":        object(nil, props("page", integer(), "limit", integer(), "total", integer())),
+		"ErrorResponse":         object(nil, props("success", boolean(), "message", str(), "error", object(nil, props("code", str(), "details", map[string]any{"type": "object", "additionalProperties": true})))),
+		"RBACPolicy":            object(nil, props("roles", map[string]any{"type": "object", "additionalProperties": true}, "permissions", arrayOf(str()))),
 		"BootstrapAdminRequest": object([]string{"name", "email", "password"}, props("name", str(), "email", str(), "password", str())),
 		"LoginResponse": object(nil, props(
 			"access_token", str(),
@@ -396,6 +440,52 @@ func schemas() map[string]any {
 
 func tag(name, description string) map[string]any {
 	return map[string]any{"name": name, "description": description}
+}
+
+func rbacPolicy() map[string]any {
+	return map[string]any{
+		"permissions": []any{
+			"manage_users",
+			"manage_projects",
+			"manage_sprints",
+			"manage_task_statuses",
+			"manage_tasks",
+			"view_assigned_tasks",
+			"view_ready_to_check_tasks",
+			"update_own_task_status",
+			"update_qa_status",
+			"view_dashboard",
+			"view_kpi",
+			"view_reports",
+		},
+		"roles": map[string]any{
+			"admin": map[string]any{
+				"display_name": "Admin",
+				"notes":        "Full access to all existing backend endpoints.",
+				"permissions":  []any{"*"},
+			},
+			"project_manager": map[string]any{
+				"display_name": "Project Manager",
+				"notes":        "Can manage projects, sprints, task statuses, tasks, view dashboard and KPI, view project/task/sprint audit logs, and generate KPI snapshots.",
+				"permissions":  []any{"manage_projects", "manage_sprints", "manage_task_statuses", "manage_tasks", "view_dashboard", "view_kpi"},
+			},
+			"developer": map[string]any{
+				"display_name": "Developer",
+				"notes":        "Can view assigned tasks, update own task status, and view own workload or KPI snapshots.",
+				"permissions":  []any{"view_assigned_tasks", "update_own_task_status"},
+			},
+			"qa": map[string]any{
+				"display_name": "QA",
+				"notes":        "Can view tasks ready to check, update QA-related statuses, and view QA-status workload.",
+				"permissions":  []any{"view_ready_to_check_tasks", "update_qa_status"},
+			},
+			"management": map[string]any{
+				"display_name": "Management",
+				"notes":        "Can view dashboard, KPI, reports, workload, and KPI snapshots.",
+				"permissions":  []any{"view_dashboard", "view_kpi", "view_reports"},
+			},
+		},
+	}
 }
 
 func request(schemaName string, exampleValue any) map[string]any {
@@ -447,16 +537,20 @@ func listResponse(description string, dataSchema any, exampleValue any) map[stri
 }
 
 func errorResponse(message string) map[string]any {
+	return errorResponseWithCode(message, "bad_request")
+}
+
+func errorResponseWithCode(message, code string) map[string]any {
 	return map[string]any{
 		"description": message,
 		"content": map[string]any{
 			"application/json": map[string]any{
-				"schema": object(nil, props("success", boolean(), "message", str(), "error", object(nil, props("code", str(), "details", map[string]any{"type": "object", "additionalProperties": true})))),
+				"schema": ref("ErrorResponse"),
 				"examples": map[string]any{
 					"default": map[string]any{"value": map[string]any{
 						"success": false,
 						"message": message,
-						"error":   map[string]any{"code": "bad_request"},
+						"error":   map[string]any{"code": code},
 					}},
 				},
 			},
@@ -465,7 +559,7 @@ func errorResponse(message string) map[string]any {
 }
 
 func validationErrorResponse() map[string]any {
-	return errorResponse("validation failed")
+	return errorResponseWithCode("validation failed", "validation_error")
 }
 
 func example(message string, data any) map[string]any {
