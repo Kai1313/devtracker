@@ -162,18 +162,19 @@ CREATE TABLE IF NOT EXISTS attachments (
 
 CREATE TABLE IF NOT EXISTS kpi_snapshots (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    developer_id UUID NOT NULL REFERENCES users(id),
     sprint_id UUID NOT NULL REFERENCES sprints(id),
-    total_assigned INT NOT NULL DEFAULT 0,
-    total_done INT NOT NULL DEFAULT 0,
-    total_ready_to_check INT NOT NULL DEFAULT 0,
-    total_qa_checked INT NOT NULL DEFAULT 0,
-    delayed_task_count INT NOT NULL DEFAULT 0,
+    developer_id UUID NOT NULL REFERENCES users(id),
+    total_assigned_tasks INT NOT NULL DEFAULT 0,
+    total_done_tasks INT NOT NULL DEFAULT 0,
+    total_ready_to_check_tasks INT NOT NULL DEFAULT 0,
+    total_checked_by_qa_tasks INT NOT NULL DEFAULT 0,
+    delayed_tasks INT NOT NULL DEFAULT 0,
     completion_rate NUMERIC(5,2) NOT NULL DEFAULT 0,
-    qa_pass_rate NUMERIC(5,2) NOT NULL DEFAULT 0,
-    total_estimated_point NUMERIC(10,2) NOT NULL DEFAULT 0,
-    total_actual_point NUMERIC(10,2) NOT NULL DEFAULT 0,
-    calculated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    total_estimated_points NUMERIC(10,2) NOT NULL DEFAULT 0,
+    total_actual_points NUMERIC(10,2) NOT NULL DEFAULT 0,
+    average_completion_time_hours NUMERIC(10,2) NOT NULL DEFAULT 0,
+    generated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
@@ -184,7 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_sprint_id ON tasks(sprint_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_developer_id ON tasks(developer_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status_id ON tasks(status_id);
 CREATE INDEX IF NOT EXISTS idx_task_histories_task_id ON task_histories(task_id);
-CREATE INDEX IF NOT EXISTS idx_kpi_snapshots_developer_sprint ON kpi_snapshots(developer_id, sprint_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kpi_snapshots_sprint_developer ON kpi_snapshots(sprint_id, developer_id);
 
 INSERT INTO roles (name, description) VALUES
 ('admin', 'System administrator'),

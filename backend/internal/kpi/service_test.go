@@ -74,12 +74,38 @@ func TestGenerateSprintSnapshotsDelegatesToRepository(t *testing.T) {
 	}
 }
 
+func TestDeveloperCanOnlyViewOwnSnapshots(t *testing.T) {
+	developerID := uuid.New()
+	otherDeveloperID := uuid.New()
+	repository := &fakeKPIRepository{}
+	service := NewService(repository, &fakeSprintRepository{})
+
+	if _, err := service.DeveloperSnapshots(context.Background(), otherDeveloperID, SnapshotScope{
+		UserID:      developerID,
+		IsDeveloper: true,
+	}); err == nil {
+		t.Fatal("expected developer to be forbidden from other developer snapshots")
+	}
+
+	if _, err := service.DeveloperSnapshots(context.Background(), developerID, SnapshotScope{
+		UserID:      developerID,
+		IsDeveloper: true,
+	}); err != nil {
+		t.Fatalf("expected own developer snapshots to be allowed: %v", err)
+	}
+
+	if repository.developerSnapshotsID == nil || *repository.developerSnapshotsID != developerID {
+		t.Fatalf("expected developer snapshots for %s, got %v", developerID, repository.developerSnapshotsID)
+	}
+}
+
 type fakeKPIRepository struct {
 	developerLiveCalled     bool
 	developerSnapshotCalled bool
 	projectLiveCalled       bool
 	projectSnapshotCalled   bool
 	generatedSprintID       *uuid.UUID
+	developerSnapshotsID    *uuid.UUID
 }
 
 func (r *fakeKPIRepository) DeveloperKPI(context.Context, *uuid.UUID) ([]DeveloperKPIResponse, error) {
@@ -92,9 +118,18 @@ func (r *fakeKPIRepository) DeveloperSnapshotKPI(context.Context, uuid.UUID) ([]
 	return []DeveloperKPIResponse{{DeveloperName: "snapshot"}}, nil
 }
 
-func (r *fakeKPIRepository) GenerateSprintSnapshots(_ context.Context, sprintID uuid.UUID) error {
+func (r *fakeKPIRepository) DeveloperSnapshots(_ context.Context, developerID uuid.UUID) ([]KPISnapshotResponse, error) {
+	r.developerSnapshotsID = &developerID
+	return []KPISnapshotResponse{{DeveloperID: developerID}}, nil
+}
+
+func (r *fakeKPIRepository) GenerateSprintSnapshots(_ context.Context, sprintID uuid.UUID) ([]KPISnapshotResponse, error) {
 	r.generatedSprintID = &sprintID
-	return nil
+	return []KPISnapshotResponse{{SprintID: sprintID}}, nil
+}
+
+func (r *fakeKPIRepository) ListSnapshots(context.Context, *uuid.UUID, *uuid.UUID) ([]KPISnapshotResponse, error) {
+	return []KPISnapshotResponse{}, nil
 }
 
 func (r *fakeKPIRepository) ProjectKPI(context.Context, *uuid.UUID) ([]ProjectKPIResponse, error) {

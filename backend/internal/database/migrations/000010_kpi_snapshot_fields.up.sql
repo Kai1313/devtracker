@@ -1,20 +1,3 @@
-CREATE TABLE IF NOT EXISTS kpi_snapshots (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sprint_id UUID NOT NULL REFERENCES sprints(id),
-    developer_id UUID NOT NULL REFERENCES users(id),
-    total_assigned_tasks INT NOT NULL DEFAULT 0,
-    total_done_tasks INT NOT NULL DEFAULT 0,
-    total_ready_to_check_tasks INT NOT NULL DEFAULT 0,
-    total_checked_by_qa_tasks INT NOT NULL DEFAULT 0,
-    delayed_tasks INT NOT NULL DEFAULT 0,
-    completion_rate NUMERIC(5,2) NOT NULL DEFAULT 0,
-    total_estimated_points NUMERIC(10,2) NOT NULL DEFAULT 0,
-    total_actual_points NUMERIC(10,2) NOT NULL DEFAULT 0,
-    average_completion_time_hours NUMERIC(10,2) NOT NULL DEFAULT 0,
-    generated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'kpi_snapshots' AND column_name = 'total_assigned')

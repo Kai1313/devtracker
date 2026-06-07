@@ -240,6 +240,21 @@ func paths() map[string]any {
 				"200": response("project KPI retrieved", arrayOf(ref("ProjectKPI")), example("project KPI retrieved", []any{projectKPIExample()})),
 			}),
 		},
+		"/kpi/snapshots": map[string]any{
+			"get": operation([]string{"KPI"}, "List KPI snapshots", "Lists KPI snapshots. Admin, Project Manager, and Management can view all snapshots; Developer results are scoped to their own developer ID.", true, []any{queryParam("sprint_id", "string", "Optional sprint UUID", idExample())}, nil, map[string]any{
+				"200": response("KPI snapshots retrieved", arrayOf(ref("KPISnapshot")), example("KPI snapshots retrieved", []any{kpiSnapshotExample()})),
+			}),
+		},
+		"/kpi/snapshots/developer/{developer_id}": map[string]any{
+			"get": operation([]string{"KPI"}, "Developer KPI snapshots", "Lists KPI snapshots for one developer. Developers can only request their own ID.", true, []any{pathParam("developer_id", "Developer UUID", idExample())}, nil, map[string]any{
+				"200": response("developer KPI snapshots retrieved", arrayOf(ref("KPISnapshot")), example("developer KPI snapshots retrieved", []any{kpiSnapshotExample()})),
+			}),
+		},
+		"/kpi/snapshots/generate/{sprint_id}": map[string]any{
+			"post": operation([]string{"KPI"}, "Generate KPI snapshots", "Generates or refreshes one KPI snapshot per developer for a closed sprint. Admin and Project Manager only.", true, []any{pathParam("sprint_id", "Sprint UUID", idExample())}, nil, map[string]any{
+				"200": response("KPI snapshots generated", arrayOf(ref("KPISnapshot")), example("KPI snapshots generated", []any{kpiSnapshotExample()})),
+			}),
+		},
 		"/audit-logs": map[string]any{
 			"get": operation([]string{"Audit Logs"}, "List audit logs", "Lists audit trail entries. Admin can view all logs; Project Manager can view task, project, and sprint logs only.", true, append(pageParams(), queryParam("user_id", "string", "Filter by user UUID. Alias: user", idExample()), queryParam("module", "string", "Filter by module", "tasks"), queryParam("action", "string", "Filter by action", "task_status_change"), queryParam("start_date", "string", "Start date YYYY-MM-DD", "2026-01-01"), queryParam("end_date", "string", "End date YYYY-MM-DD", "2026-01-31")), nil, map[string]any{
 				"200": listResponse("audit logs retrieved", arrayOf(ref("AuditLog")), example("audit logs retrieved", []any{auditLogExample()})),
@@ -364,6 +379,7 @@ func schemas() map[string]any {
 		"DashboardSummary":        object(nil, props("total_tasks", integer(), "todo_tasks", integer(), "in_progress_tasks", integer(), "ready_to_check_tasks", integer(), "checked_by_qa_tasks", integer(), "done_tasks", integer(), "blocked_tasks", integer(), "completion_rate", number(), "total_developers", integer(), "total_projects", integer())),
 		"DeveloperKPI":            object(nil, props("developer_id", uuidSchema(), "developer_name", str(), "total_assigned", integer(), "total_done", integer(), "total_ready_to_check", integer(), "total_checked_by_qa", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_point", number(), "total_actual_point", number())),
 		"ProjectKPI":              object(nil, props("project_id", uuidSchema(), "project_name", str(), "total_assigned", integer(), "total_done", integer(), "total_ready_to_check", integer(), "total_checked_by_qa", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_point", number(), "total_actual_point", number())),
+		"KPISnapshot":             object(nil, props("id", uuidSchema(), "sprint_id", uuidSchema(), "developer_id", uuidSchema(), "developer_name", str(), "total_assigned_tasks", integer(), "total_done_tasks", integer(), "total_ready_to_check_tasks", integer(), "total_checked_by_qa_tasks", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_points", number(), "total_actual_points", number(), "average_completion_time_hours", number(), "generated_at", dateTime(), "created_at", dateTime())),
 		"AuditLog":                object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "module", str(), "action", str(), "entity_id", uuidSchema(), "old_value", map[string]any{"type": "object", "additionalProperties": true}, "new_value", map[string]any{"type": "object", "additionalProperties": true}, "ip_address", str(), "user_agent", str(), "created_at", dateTime())),
 		"Notification":            object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "title", str(), "message", str(), "type", str(), "reference_module", str(), "reference_id", uuidSchema(), "is_read", boolean(), "read_at", dateTime(), "created_at", dateTime())),
 		"NotificationList":        object(nil, props("notifications", arrayOf(ref("Notification")), "unread_count", integer())),
@@ -473,13 +489,17 @@ func pageParams() []any {
 }
 
 func pathIDParam() map[string]any {
+	return pathParam("id", "Resource UUID", idExample())
+}
+
+func pathParam(name, description string, exampleValue any) map[string]any {
 	return map[string]any{
-		"name":        "id",
+		"name":        name,
 		"in":          "path",
 		"required":    true,
-		"description": "Resource UUID",
+		"description": description,
 		"schema":      uuidSchema(),
-		"example":     idExample(),
+		"example":     exampleValue,
 	}
 }
 
@@ -616,6 +636,10 @@ func developerKPIExample() map[string]any {
 
 func projectKPIExample() map[string]any {
 	return map[string]any{"project_id": idExample(), "project_name": "Dev Tracker", "total_assigned": 8, "total_done": 4, "total_ready_to_check": 1, "total_checked_by_qa": 1, "delayed_tasks": 2, "completion_rate": 50, "total_estimated_point": 21, "total_actual_point": 18}
+}
+
+func kpiSnapshotExample() map[string]any {
+	return map[string]any{"id": idExample(), "sprint_id": idExample(), "developer_id": idExample(), "developer_name": "Dev User", "total_assigned_tasks": 8, "total_done_tasks": 4, "total_ready_to_check_tasks": 1, "total_checked_by_qa_tasks": 1, "delayed_tasks": 2, "completion_rate": 50, "total_estimated_points": 21, "total_actual_points": 18, "average_completion_time_hours": 36, "generated_at": "2026-01-14T00:00:00Z", "created_at": "2026-01-14T00:00:00Z"}
 }
 
 func auditLogExample() map[string]any {
