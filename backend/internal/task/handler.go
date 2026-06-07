@@ -1,8 +1,11 @@
 package task
 
 import (
+	"strings"
+
 	"devtracker/backend/internal/audit"
 	"devtracker/backend/internal/httpx"
+	"devtracker/backend/internal/notification"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
 	appvalidator "devtracker/backend/pkg/validator"
@@ -11,12 +14,13 @@ import (
 )
 
 type Handler struct {
-	service *Service
-	audit   *audit.Service
+	service       *Service
+	audit         *audit.Service
+	notifications *notification.Service
 }
 
-func NewHandler(service *Service, auditService *audit.Service) *Handler {
-	return &Handler{service: service, audit: auditService}
+func NewHandler(service *Service, auditService *audit.Service, notificationService *notification.Service) *Handler {
+	return &Handler{service: service, audit: auditService, notifications: notificationService}
 }
 
 func (h *Handler) List(c *fiber.Ctx) error {
@@ -95,6 +99,10 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
+	if err := notification.CreateNotification(c.UserContext(), h.notifications, taskAssignedNotification(result)); err != nil {
+		return err
+	}
+
 	return response.Created(c, "task created", result)
 }
 
@@ -150,6 +158,21 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		}
 	}
 
+	if oldValue.DeveloperID != result.DeveloperID {
+		if err := notification.CreateNotification(c.UserContext(), h.notifications, taskAssignedNotification(result)); err != nil {
+			return err
+		}
+	}
+
+	if oldValue.StatusID != result.StatusID {
+		input, ok := statusChangeNotification(result)
+		if ok {
+			if err := notification.CreateNotification(c.UserContext(), h.notifications, input); err != nil {
+				return err
+			}
+		}
+	}
+
 	return response.OK(c, "task updated", result)
 }
 
@@ -191,4 +214,42 @@ func taskStatusAuditValue(task *TaskResponse) map[string]any {
 		"status_id":   task.StatusID,
 		"status_name": task.Status.StatusName,
 	}
+}
+
+func taskAssignedNotification(task *TaskResponse) notification.CreateInput {
+	taskID := task.ID
+	return notification.CreateInput{
+		UserID:  task.DeveloperID,
+		TaskID:  &taskID,
+		Type:    notification.TypeTaskAssigned,
+		Title:   "Task assigned",
+		Message: "Task assigned: " + task.TaskTitle,
+	}
+}
+
+func statusChangeNotification(task *TaskResponse) (notification.CreateInput, bool) {
+	taskID := task.ID
+	input := notification.CreateInput{
+		UserID: task.DeveloperID,
+		TaskID: &taskID,
+	}
+
+	switch strings.ToLower(strings.TrimSpace(task.Status.StatusName)) {
+	case "ready to check":
+		input.Type = notification.TypeTaskReadyToCheck
+		input.Title = "Task ready to check"
+		input.Message = "Task moved to Ready to Check: " + task.TaskTitle
+	case "checked by qa":
+		input.Type = notification.TypeTaskCheckedByQA
+		input.Title = "Task checked by QA"
+		input.Message = "Task moved to Checked by QA: " + task.TaskTitle
+	case "done":
+		input.Type = notification.TypeTaskDone
+		input.Title = "Task done"
+		input.Message = "Task moved to Done: " + task.TaskTitle
+	default:
+		return notification.CreateInput{}, false
+	}
+
+	return input, true
 }
