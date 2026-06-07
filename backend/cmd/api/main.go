@@ -20,6 +20,7 @@ import (
 	statusmodule "devtracker/backend/internal/status"
 	taskmodule "devtracker/backend/internal/task"
 	usermodule "devtracker/backend/internal/user"
+	workloadmodule "devtracker/backend/internal/workload"
 	"devtracker/backend/pkg/response"
 
 	"github.com/gofiber/fiber/v2"
@@ -63,6 +64,7 @@ func main() {
 	kpiRepository := kpimodule.NewRepository(db)
 	auditRepository := auditmodule.NewRepository(db)
 	notificationRepository := notificationmodule.NewRepository(db)
+	workloadRepository := workloadmodule.NewRepository(db)
 
 	userService := usermodule.NewService(userRepository)
 	projectService := projectmodule.NewService(projectRepository)
@@ -74,6 +76,7 @@ func main() {
 	authService := auth.NewService(userRepository, cfg.JWT)
 	auditService := auditmodule.NewService(auditRepository)
 	notificationService := notificationmodule.NewService(notificationRepository)
+	workloadService := workloadmodule.NewService(workloadRepository, sprintRepository, projectRepository)
 
 	authHandler := auth.NewHandler(authService, auditService)
 	userHandler := usermodule.NewHandler(userService, auditService)
@@ -85,6 +88,7 @@ func main() {
 	kpiHandler := kpimodule.NewHandler(kpiService)
 	auditHandler := auditmodule.NewHandler(auditService)
 	notificationHandler := notificationmodule.NewHandler(notificationService)
+	workloadHandler := workloadmodule.NewHandler(workloadService)
 
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.App.Name,
@@ -126,6 +130,7 @@ func main() {
 	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware, appmiddleware.RequirePermission)
 	auditmodule.RegisterRoutes(api, auditHandler, authMiddleware, appmiddleware.RequireRole("admin"))
 	notificationmodule.RegisterRoutes(api, notificationHandler, authMiddleware)
+	workloadmodule.RegisterRoutes(api, workloadHandler, authMiddleware, appmiddleware.RequirePermission)
 
 	serverErr := make(chan error, 1)
 	go func() {
