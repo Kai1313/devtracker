@@ -1,6 +1,7 @@
 package sprint
 
 import (
+	"devtracker/backend/internal/audit"
 	"devtracker/backend/internal/httpx"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
@@ -11,10 +12,11 @@ import (
 
 type Handler struct {
 	service *Service
+	audit   *audit.Service
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, auditService *audit.Service) *Handler {
+	return &Handler{service: service, audit: auditService}
 }
 
 func (h *Handler) List(c *fiber.Ctx) error {
@@ -48,6 +50,11 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Create(c *fiber.Ctx) error {
+	actorID, err := httpx.CurrentUserID(c)
+	if err != nil {
+		return err
+	}
+
 	var req CreateSprintRequest
 	if err := c.BodyParser(&req); err != nil {
 		return apperrors.BadRequest("invalid request body")
@@ -62,11 +69,25 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "sprints",
+		Action:   "create",
+		NewValue: result,
+	}); err != nil {
+		return err
+	}
+
 	return response.Created(c, "sprint created", result)
 }
 
 func (h *Handler) Update(c *fiber.Ctx) error {
 	id, err := httpx.ParseUUIDParam(c, "id")
+	if err != nil {
+		return err
+	}
+
+	actorID, err := httpx.CurrentUserID(c)
 	if err != nil {
 		return err
 	}
@@ -80,8 +101,23 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return err
 	}
 
+	oldValue, err := h.service.Get(c.UserContext(), id)
+	if err != nil {
+		return err
+	}
+
 	result, err := h.service.Update(c.UserContext(), id, req)
 	if err != nil {
+		return err
+	}
+
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "sprints",
+		Action:   "update",
+		OldValue: oldValue,
+		NewValue: result,
+	}); err != nil {
 		return err
 	}
 
@@ -94,8 +130,28 @@ func (h *Handler) Close(c *fiber.Ctx) error {
 		return err
 	}
 
+	actorID, err := httpx.CurrentUserID(c)
+	if err != nil {
+		return err
+	}
+
+	oldValue, err := h.service.Get(c.UserContext(), id)
+	if err != nil {
+		return err
+	}
+
 	result, err := h.service.Close(c.UserContext(), id)
 	if err != nil {
+		return err
+	}
+
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "sprints",
+		Action:   "update",
+		OldValue: oldValue,
+		NewValue: result,
+	}); err != nil {
 		return err
 	}
 
@@ -108,7 +164,26 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		return err
 	}
 
+	actorID, err := httpx.CurrentUserID(c)
+	if err != nil {
+		return err
+	}
+
+	oldValue, err := h.service.Get(c.UserContext(), id)
+	if err != nil {
+		return err
+	}
+
 	if err := h.service.Delete(c.UserContext(), id); err != nil {
+		return err
+	}
+
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "sprints",
+		Action:   "delete",
+		OldValue: oldValue,
+	}); err != nil {
 		return err
 	}
 

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"devtracker/backend/internal/audit"
 	"devtracker/backend/internal/httpx"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
@@ -11,10 +12,11 @@ import (
 
 type Handler struct {
 	service *Service
+	audit   *audit.Service
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, auditService *audit.Service) *Handler {
+	return &Handler{service: service, audit: auditService}
 }
 
 func (h *Handler) Login(c *fiber.Ctx) error {
@@ -32,10 +34,33 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		return err
 	}
 
+	userID := result.User.ID
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &userID,
+		Module:   "auth",
+		Action:   "login",
+		NewValue: result.User,
+	}); err != nil {
+		return err
+	}
+
 	return response.OK(c, "login successful", result)
 }
 
 func (h *Handler) Logout(c *fiber.Ctx) error {
+	userID, err := httpx.CurrentUserID(c)
+	if err != nil {
+		return err
+	}
+
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID: &userID,
+		Module: "auth",
+		Action: "logout",
+	}); err != nil {
+		return err
+	}
+
 	return response.OK(c, "logout successful", nil)
 }
 
@@ -51,6 +76,16 @@ func (h *Handler) BootstrapAdmin(c *fiber.Ctx) error {
 
 	result, err := h.service.BootstrapAdmin(c.UserContext(), req)
 	if err != nil {
+		return err
+	}
+
+	userID := result.ID
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &userID,
+		Module:   "users",
+		Action:   "create",
+		NewValue: result,
+	}); err != nil {
 		return err
 	}
 

@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	auditmodule "devtracker/backend/internal/audit"
 	"devtracker/backend/internal/auth"
 	"devtracker/backend/internal/config"
 	dashboardmodule "devtracker/backend/internal/dashboard"
@@ -59,6 +60,7 @@ func main() {
 	taskRepository := taskmodule.NewRepository(db)
 	dashboardRepository := dashboardmodule.NewRepository(db)
 	kpiRepository := kpimodule.NewRepository(db)
+	auditRepository := auditmodule.NewRepository(db)
 
 	userService := usermodule.NewService(userRepository)
 	projectService := projectmodule.NewService(projectRepository)
@@ -68,15 +70,17 @@ func main() {
 	dashboardService := dashboardmodule.NewService(dashboardRepository, sprintRepository)
 	kpiService := kpimodule.NewService(kpiRepository, sprintRepository)
 	authService := auth.NewService(userRepository, cfg.JWT)
+	auditService := auditmodule.NewService(auditRepository)
 
-	authHandler := auth.NewHandler(authService)
-	userHandler := usermodule.NewHandler(userService)
-	projectHandler := projectmodule.NewHandler(projectService)
-	sprintHandler := sprintmodule.NewHandler(sprintService)
-	statusHandler := statusmodule.NewHandler(statusService)
-	taskHandler := taskmodule.NewHandler(taskService)
+	authHandler := auth.NewHandler(authService, auditService)
+	userHandler := usermodule.NewHandler(userService, auditService)
+	projectHandler := projectmodule.NewHandler(projectService, auditService)
+	sprintHandler := sprintmodule.NewHandler(sprintService, auditService)
+	statusHandler := statusmodule.NewHandler(statusService, auditService)
+	taskHandler := taskmodule.NewHandler(taskService, auditService)
 	dashboardHandler := dashboardmodule.NewHandler(dashboardService)
 	kpiHandler := kpimodule.NewHandler(kpiService)
+	auditHandler := auditmodule.NewHandler(auditService)
 
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.App.Name,
@@ -116,6 +120,7 @@ func main() {
 	taskmodule.RegisterRoutes(api, taskHandler, authMiddleware, appmiddleware.RequirePermission)
 	dashboardmodule.RegisterRoutes(api, dashboardHandler, authMiddleware, appmiddleware.RequirePermission)
 	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware, appmiddleware.RequirePermission)
+	auditmodule.RegisterRoutes(api, auditHandler, authMiddleware, appmiddleware.RequireRole("admin"))
 
 	serverErr := make(chan error, 1)
 	go func() {

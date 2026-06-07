@@ -1,6 +1,7 @@
 package task
 
 import (
+	"devtracker/backend/internal/audit"
 	"devtracker/backend/internal/httpx"
 	apperrors "devtracker/backend/pkg/errors"
 	"devtracker/backend/pkg/response"
@@ -11,10 +12,11 @@ import (
 
 type Handler struct {
 	service *Service
+	audit   *audit.Service
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, auditService *audit.Service) *Handler {
+	return &Handler{service: service, audit: auditService}
 }
 
 func (h *Handler) List(c *fiber.Ctx) error {
@@ -84,6 +86,15 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "tasks",
+		Action:   "create",
+		NewValue: result,
+	}); err != nil {
+		return err
+	}
+
 	return response.Created(c, "task created", result)
 }
 
@@ -107,16 +118,53 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return err
 	}
 
+	oldValue, err := h.service.Get(c.UserContext(), id)
+	if err != nil {
+		return err
+	}
+
 	result, err := h.service.Update(c.UserContext(), id, req, actorID)
 	if err != nil {
 		return err
+	}
+
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "tasks",
+		Action:   "update",
+		OldValue: oldValue,
+		NewValue: result,
+	}); err != nil {
+		return err
+	}
+
+	if oldValue.StatusID != result.StatusID {
+		if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+			UserID:   &actorID,
+			Module:   "tasks",
+			Action:   "status_change",
+			OldValue: taskStatusAuditValue(oldValue),
+			NewValue: taskStatusAuditValue(result),
+		}); err != nil {
+			return err
+		}
 	}
 
 	return response.OK(c, "task updated", result)
 }
 
 func (h *Handler) Delete(c *fiber.Ctx) error {
+	actorID, err := httpx.CurrentUserID(c)
+	if err != nil {
+		return err
+	}
+
 	id, err := httpx.ParseUUIDParam(c, "id")
+	if err != nil {
+		return err
+	}
+
+	oldValue, err := h.service.Get(c.UserContext(), id)
 	if err != nil {
 		return err
 	}
@@ -125,5 +173,22 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		return err
 	}
 
+	if err := audit.RecordHTTPRequest(c, h.audit, audit.RecordInput{
+		UserID:   &actorID,
+		Module:   "tasks",
+		Action:   "delete",
+		OldValue: oldValue,
+	}); err != nil {
+		return err
+	}
+
 	return response.OK(c, "task deleted", nil)
+}
+
+func taskStatusAuditValue(task *TaskResponse) map[string]any {
+	return map[string]any{
+		"task_id":     task.ID,
+		"status_id":   task.StatusID,
+		"status_name": task.Status.StatusName,
+	}
 }
