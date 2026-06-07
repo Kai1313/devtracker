@@ -2,6 +2,7 @@ package task
 
 import (
 	"strings"
+	"time"
 
 	"devtracker/backend/internal/audit"
 	"devtracker/backend/internal/httpx"
@@ -121,6 +122,12 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
+	if isTaskOverdue(result) {
+		if err := notification.CreateNotification(c.UserContext(), h.notifications, taskOverdueNotification(result)); err != nil {
+			return err
+		}
+	}
+
 	return response.Created(c, "task created", result)
 }
 
@@ -194,6 +201,12 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		}
 	}
 
+	if !isTaskOverdue(oldValue) && isTaskOverdue(result) {
+		if err := notification.CreateNotification(c.UserContext(), h.notifications, taskOverdueNotification(result)); err != nil {
+			return err
+		}
+	}
+
 	return response.OK(c, "task updated", result)
 }
 
@@ -261,19 +274,21 @@ func taskStatusAuditValue(task *TaskResponse) map[string]any {
 func taskAssignedNotification(task *TaskResponse) notification.CreateInput {
 	taskID := task.ID
 	return notification.CreateInput{
-		UserID:  task.DeveloperID,
-		TaskID:  &taskID,
-		Type:    notification.TypeTaskAssigned,
-		Title:   "Task assigned",
-		Message: "Task assigned: " + task.TaskTitle,
+		UserID:          task.DeveloperID,
+		Type:            notification.TypeTaskAssigned,
+		Title:           "Task assigned",
+		Message:         "Task assigned: " + task.TaskTitle,
+		ReferenceModule: notification.ReferenceModuleTasks,
+		ReferenceID:     &taskID,
 	}
 }
 
 func statusChangeNotification(task *TaskResponse) (notification.CreateInput, bool) {
 	taskID := task.ID
 	input := notification.CreateInput{
-		UserID: task.DeveloperID,
-		TaskID: &taskID,
+		UserID:          task.DeveloperID,
+		ReferenceModule: notification.ReferenceModuleTasks,
+		ReferenceID:     &taskID,
 	}
 
 	switch strings.ToLower(strings.TrimSpace(task.Status.StatusName)) {
@@ -294,4 +309,30 @@ func statusChangeNotification(task *TaskResponse) (notification.CreateInput, boo
 	}
 
 	return input, true
+}
+
+func taskOverdueNotification(task *TaskResponse) notification.CreateInput {
+	taskID := task.ID
+	return notification.CreateInput{
+		UserID:          task.DeveloperID,
+		Type:            notification.TypeTaskOverdue,
+		Title:           "Task overdue",
+		Message:         "Task overdue: " + task.TaskTitle,
+		ReferenceModule: notification.ReferenceModuleTasks,
+		ReferenceID:     &taskID,
+	}
+}
+
+func isTaskOverdue(task *TaskResponse) bool {
+	if task == nil || task.DueDate == nil || task.CompletedDate != nil || task.Status.IsDone {
+		return false
+	}
+
+	dueDate, err := time.Parse(dateLayout, *task.DueDate)
+	if err != nil {
+		return false
+	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	return dueDate.Before(today)
 }

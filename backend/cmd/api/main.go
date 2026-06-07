@@ -88,7 +88,7 @@ func main() {
 	dashboardHandler := dashboardmodule.NewHandler(dashboardService)
 	kpiHandler := kpimodule.NewHandler(kpiService)
 	auditHandler := auditmodule.NewHandler(auditService)
-	notificationHandler := notificationmodule.NewHandler(notificationService)
+	notificationHandler := notificationmodule.NewHandler(notificationService, auditService)
 	workloadHandler := workloadmodule.NewHandler(workloadService)
 
 	app := fiber.New(fiber.Config{

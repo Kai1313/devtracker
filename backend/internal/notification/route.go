@@ -15,6 +15,18 @@ func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.
 	// @Router /notifications [get]
 	group.Get("/", handler.List)
 
+	// @Summary Notification unread count
+	// @Tags Notifications
+	// @Security BearerAuth
+	// @Router /notifications/unread-count [get]
+	group.Get("/unread-count", handler.UnreadCount)
+
+	// @Summary Mark all notifications as read
+	// @Tags Notifications
+	// @Security BearerAuth
+	// @Router /notifications/read-all [patch]
+	group.Patch("/read-all", handler.MarkAllRead)
+
 	// @Summary Mark notification as read
 	// @Tags Notifications
 	// @Security BearerAuth

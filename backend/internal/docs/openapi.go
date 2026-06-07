@@ -247,8 +247,18 @@ func paths() map[string]any {
 			}),
 		},
 		"/notifications": map[string]any{
-			"get": operation([]string{"Notifications"}, "List notifications", "Lists notifications for the authenticated user and returns unread count.", true, pageParams(), nil, map[string]any{
+			"get": operation([]string{"Notifications"}, "List notifications", "Lists notifications for the authenticated user and returns unread count. Admin can see all notifications.", true, pageParams(), nil, map[string]any{
 				"200": listResponse("notifications retrieved", ref("NotificationList"), example("notifications retrieved", notificationListExample())),
+			}),
+		},
+		"/notifications/unread-count": map[string]any{
+			"get": operation([]string{"Notifications"}, "Notification unread count", "Returns unread notification count. Admin gets the global unread count.", true, nil, nil, map[string]any{
+				"200": response("notification unread count retrieved", ref("NotificationUnreadCount"), example("notification unread count retrieved", map[string]any{"unread_count": 1})),
+			}),
+		},
+		"/notifications/read-all": map[string]any{
+			"patch": operation([]string{"Notifications"}, "Mark all notifications read", "Marks all visible notifications as read. Admin marks all notifications; other users mark only their own.", true, nil, nil, map[string]any{
+				"200": response("notifications marked as read", ref("NotificationReadAll"), example("notifications marked as read", map[string]any{"read_count": 3, "unread_count": 0})),
 			}),
 		},
 		"/notifications/{id}/read": map[string]any{
@@ -355,9 +365,11 @@ func schemas() map[string]any {
 		"DeveloperKPI":            object(nil, props("developer_id", uuidSchema(), "developer_name", str(), "total_assigned", integer(), "total_done", integer(), "total_ready_to_check", integer(), "total_checked_by_qa", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_point", number(), "total_actual_point", number())),
 		"ProjectKPI":              object(nil, props("project_id", uuidSchema(), "project_name", str(), "total_assigned", integer(), "total_done", integer(), "total_ready_to_check", integer(), "total_checked_by_qa", integer(), "delayed_tasks", integer(), "completion_rate", number(), "total_estimated_point", number(), "total_actual_point", number())),
 		"AuditLog":                object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "module", str(), "action", str(), "entity_id", uuidSchema(), "old_value", map[string]any{"type": "object", "additionalProperties": true}, "new_value", map[string]any{"type": "object", "additionalProperties": true}, "ip_address", str(), "user_agent", str(), "created_at", dateTime())),
-		"Notification":            object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "task_id", uuidSchema(), "type", str(), "title", str(), "message", str(), "is_read", boolean(), "read_at", dateTime(), "created_at", dateTime())),
+		"Notification":            object(nil, props("id", uuidSchema(), "user_id", uuidSchema(), "title", str(), "message", str(), "type", str(), "reference_module", str(), "reference_id", uuidSchema(), "is_read", boolean(), "read_at", dateTime(), "created_at", dateTime())),
 		"NotificationList":        object(nil, props("notifications", arrayOf(ref("Notification")), "unread_count", integer())),
 		"NotificationRead":        object(nil, props("notification", ref("Notification"), "unread_count", integer())),
+		"NotificationUnreadCount": object(nil, props("unread_count", integer())),
+		"NotificationReadAll":     object(nil, props("read_count", integer(), "unread_count", integer())),
 		"DeveloperWorkload":       object(nil, props("developer_id", uuidSchema(), "developer_name", str(), "active_tasks", integer(), "total_points", number(), "overdue_tasks", integer(), "current_sprint_tasks", integer(), "workload_classification", map[string]any{"type": "string", "enum": []any{"LOW", "NORMAL", "HIGH", "OVERLOADED"}})),
 	}
 }
@@ -611,7 +623,7 @@ func auditLogExample() map[string]any {
 }
 
 func notificationExample() map[string]any {
-	return map[string]any{"id": idExample(), "user_id": idExample(), "task_id": idExample(), "type": "task_ready_to_check", "title": "Task ready to check", "message": "Task moved to Ready to Check: Build workload API", "is_read": false, "created_at": "2026-01-01T00:00:00Z"}
+	return map[string]any{"id": idExample(), "user_id": idExample(), "title": "Task ready to check", "message": "Task moved to Ready to Check: Build workload API", "type": "task_ready_to_check", "reference_module": "tasks", "reference_id": idExample(), "is_read": false, "created_at": "2026-01-01T00:00:00Z"}
 }
 
 func notificationListExample() map[string]any {

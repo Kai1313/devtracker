@@ -8,15 +8,16 @@ import (
 )
 
 type Notification struct {
-	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	UserID    uuid.UUID  `gorm:"type:uuid;not null;index"`
-	TaskID    *uuid.UUID `gorm:"type:uuid;index"`
-	Type      string     `gorm:"size:100;not null;index"`
-	Title     string     `gorm:"size:150;not null"`
-	Message   string     `gorm:"type:text;not null"`
-	IsRead    bool       `gorm:"not null;default:false;index"`
-	ReadAt    *time.Time
-	CreatedAt time.Time
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	UserID          uuid.UUID  `gorm:"type:uuid;not null;index"`
+	Title           string     `gorm:"size:150;not null"`
+	Message         string     `gorm:"type:text;not null"`
+	Type            string     `gorm:"size:100;not null;index"`
+	ReferenceModule string     `gorm:"size:100;index"`
+	ReferenceID     *uuid.UUID `gorm:"type:uuid;index"`
+	IsRead          bool       `gorm:"not null;default:false;index"`
+	ReadAt          *time.Time
+	CreatedAt       time.Time
 }
 
 func (n *Notification) BeforeCreate(_ *gorm.DB) error {

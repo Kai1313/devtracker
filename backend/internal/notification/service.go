@@ -41,13 +41,14 @@ func (s *Service) Create(ctx context.Context, input CreateInput) error {
 	}
 
 	return s.repository.Create(ctx, &Notification{
-		ID:      uuid.New(),
-		UserID:  input.UserID,
-		TaskID:  input.TaskID,
-		Type:    notificationType,
-		Title:   title,
-		Message: message,
-		IsRead:  false,
+		ID:              uuid.New(),
+		UserID:          input.UserID,
+		Title:           title,
+		Message:         message,
+		Type:            notificationType,
+		ReferenceModule: normalize(input.ReferenceModule),
+		ReferenceID:     input.ReferenceID,
+		IsRead:          false,
 	})
 }
 
@@ -64,7 +65,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) (*ListResponse, map
 		return nil, nil, err
 	}
 
-	unreadCount, err := s.repository.CountUnread(ctx, query.UserID)
+	unreadCount, err := s.repository.CountUnread(ctx, query.UserID, query.IncludeAll)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -81,43 +82,83 @@ func (s *Service) List(ctx context.Context, query ListQuery) (*ListResponse, map
 	}, meta, nil
 }
 
-func (s *Service) MarkRead(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*MarkReadResponse, error) {
+func (s *Service) UnreadCount(ctx context.Context, userID uuid.UUID, includeAll bool) (*UnreadCountResponse, error) {
 	if userID == uuid.Nil {
 		return nil, apperrors.BadRequest("user_id is required")
 	}
 
-	current, err := s.repository.FindByIDForUser(ctx, id, userID)
+	unreadCount, err := s.repository.CountUnread(ctx, userID, includeAll)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, apperrors.NotFound("notification not found")
-		}
-
 		return nil, err
 	}
 
+	return &UnreadCountResponse{UnreadCount: unreadCount}, nil
+}
+
+func (s *Service) MarkRead(ctx context.Context, id uuid.UUID, userID uuid.UUID, includeAll bool) (*MarkReadResponse, bool, error) {
+	if userID == uuid.Nil {
+		return nil, false, apperrors.BadRequest("user_id is required")
+	}
+
+	current, err := s.repository.FindByID(ctx, id, userID, includeAll)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, false, apperrors.NotFound("notification not found")
+		}
+
+		return nil, false, err
+	}
+
+	changed := false
 	if !current.IsRead {
 		now := time.Now().UTC()
 		current.IsRead = true
 		current.ReadAt = &now
+		changed = true
 
 		if err := s.repository.Update(ctx, current); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
-	unreadCount, err := s.repository.CountUnread(ctx, userID)
+	unreadCount, err := s.repository.CountUnread(ctx, userID, includeAll)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	return &MarkReadResponse{
 		Notification: NewResponse(*current),
 		UnreadCount:  unreadCount,
+	}, changed, nil
+}
+
+func (s *Service) MarkAllRead(ctx context.Context, userID uuid.UUID, includeAll bool) (*MarkAllReadResponse, error) {
+	if userID == uuid.Nil {
+		return nil, apperrors.BadRequest("user_id is required")
+	}
+
+	readCount, err := s.repository.MarkAllRead(ctx, userID, includeAll)
+	if err != nil {
+		return nil, err
+	}
+
+	unreadCount, err := s.repository.CountUnread(ctx, userID, includeAll)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MarkAllReadResponse{
+		ReadCount:   readCount,
+		UnreadCount: unreadCount,
 	}, nil
 }
 
 func normalize(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+
+	return normalized
 }
 
 func normalizePage(page int) int {

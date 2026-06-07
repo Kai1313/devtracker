@@ -39,6 +39,8 @@ func TestSpecIsSerializableAndDocumentsRoutes(t *testing.T) {
 		"/kpi/projects",
 		"/audit-logs",
 		"/notifications",
+		"/notifications/unread-count",
+		"/notifications/read-all",
 		"/notifications/{id}/read",
 		"/workload",
 	}

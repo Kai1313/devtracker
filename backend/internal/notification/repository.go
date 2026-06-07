@@ -2,16 +2,18 @@ package notification
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Repository interface {
-	CountUnread(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountUnread(ctx context.Context, userID uuid.UUID, includeAll bool) (int64, error)
 	Create(ctx context.Context, notification *Notification) error
-	FindByIDForUser(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*Notification, error)
+	FindByID(ctx context.Context, id uuid.UUID, userID uuid.UUID, includeAll bool) (*Notification, error)
 	List(ctx context.Context, query ListQuery) ([]Notification, int64, error)
+	MarkAllRead(ctx context.Context, userID uuid.UUID, includeAll bool) (int64, error)
 	Update(ctx context.Context, notification *Notification) error
 }
 
@@ -23,13 +25,17 @@ func NewRepository(db *gorm.DB) Repository {
 	return &repository{db: db}
 }
 
-func (r *repository) CountUnread(ctx context.Context, userID uuid.UUID) (int64, error) {
+func (r *repository) CountUnread(ctx context.Context, userID uuid.UUID, includeAll bool) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Model(&Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).
-		Count(&count).
-		Error
+		Where("is_read = ?", false)
+
+	if !includeAll {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	err := query.Count(&count).Error
 
 	return count, err
 }
@@ -38,19 +44,25 @@ func (r *repository) Create(ctx context.Context, notification *Notification) err
 	return r.db.WithContext(ctx).Create(notification).Error
 }
 
-func (r *repository) FindByIDForUser(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*Notification, error) {
+func (r *repository) FindByID(ctx context.Context, id uuid.UUID, userID uuid.UUID, includeAll bool) (*Notification, error) {
 	var notification Notification
-	err := r.db.WithContext(ctx).
-		First(&notification, "id = ? AND user_id = ?", id, userID).
-		Error
+	query := r.db.WithContext(ctx).Where("id = ?", id)
+	if !includeAll {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	err := query.First(&notification).Error
 
 	return &notification, err
 }
 
 func (r *repository) List(ctx context.Context, query ListQuery) ([]Notification, int64, error) {
 	dbQuery := r.db.WithContext(ctx).
-		Model(&Notification{}).
-		Where("user_id = ?", query.UserID)
+		Model(&Notification{})
+
+	if !query.IncludeAll {
+		dbQuery = dbQuery.Where("user_id = ?", query.UserID)
+	}
 
 	var total int64
 	if err := dbQuery.Count(&total).Error; err != nil {
@@ -67,6 +79,24 @@ func (r *repository) List(ctx context.Context, query ListQuery) ([]Notification,
 		Error
 
 	return notifications, total, err
+}
+
+func (r *repository) MarkAllRead(ctx context.Context, userID uuid.UUID, includeAll bool) (int64, error) {
+	now := time.Now().UTC()
+	query := r.db.WithContext(ctx).
+		Model(&Notification{}).
+		Where("is_read = ?", false)
+
+	if !includeAll {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	result := query.Updates(map[string]any{
+		"is_read": true,
+		"read_at": now,
+	})
+
+	return result.RowsAffected, result.Error
 }
 
 func (r *repository) Update(ctx context.Context, notification *Notification) error {

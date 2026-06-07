@@ -15,11 +15,12 @@ func TestCreateNotification(t *testing.T) {
 	taskID := uuid.New()
 
 	err := service.Create(context.Background(), CreateInput{
-		UserID:  userID,
-		TaskID:  &taskID,
-		Type:    " Task_Assigned ",
-		Title:   " Task assigned ",
-		Message: " Build API ",
+		UserID:          userID,
+		ReferenceModule: " Tasks ",
+		ReferenceID:     &taskID,
+		Type:            " Task_Assigned ",
+		Title:           " Task assigned ",
+		Message:         " Build API ",
 	})
 	if err != nil {
 		t.Fatalf("create notification: %v", err)
@@ -33,8 +34,11 @@ func TestCreateNotification(t *testing.T) {
 	if created.UserID != userID {
 		t.Fatalf("expected user_id %s, got %s", userID, created.UserID)
 	}
-	if created.TaskID == nil || *created.TaskID != taskID {
-		t.Fatalf("expected task_id %s, got %v", taskID, created.TaskID)
+	if created.ReferenceModule != ReferenceModuleTasks {
+		t.Fatalf("expected reference module %q, got %q", ReferenceModuleTasks, created.ReferenceModule)
+	}
+	if created.ReferenceID == nil || *created.ReferenceID != taskID {
+		t.Fatalf("expected reference_id %s, got %v", taskID, created.ReferenceID)
 	}
 	if created.Type != TypeTaskAssigned {
 		t.Fatalf("expected type %q, got %q", TypeTaskAssigned, created.Type)
@@ -88,6 +92,42 @@ func TestListReturnsUnreadCount(t *testing.T) {
 	}
 }
 
+func TestAdminListAndUnreadCountIncludeAllNotifications(t *testing.T) {
+	repository := newFakeRepository()
+	service := NewService(repository)
+	userID := uuid.New()
+	otherUserID := uuid.New()
+
+	repository.notifications = []Notification{
+		{ID: uuid.New(), UserID: userID, Type: TypeTaskAssigned, Title: "A", Message: "A"},
+		{ID: uuid.New(), UserID: otherUserID, Type: TypeTaskDone, Title: "B", Message: "B"},
+	}
+
+	result, _, err := service.List(context.Background(), ListQuery{
+		Page:       1,
+		Limit:      20,
+		UserID:     userID,
+		IncludeAll: true,
+	})
+	if err != nil {
+		t.Fatalf("admin list notifications: %v", err)
+	}
+	if len(result.Notifications) != 2 {
+		t.Fatalf("expected admin to see all notifications, got %d", len(result.Notifications))
+	}
+	if result.UnreadCount != 2 {
+		t.Fatalf("expected unread count 2, got %d", result.UnreadCount)
+	}
+
+	count, err := service.UnreadCount(context.Background(), userID, true)
+	if err != nil {
+		t.Fatalf("admin unread count: %v", err)
+	}
+	if count.UnreadCount != 2 {
+		t.Fatalf("expected unread count 2, got %d", count.UnreadCount)
+	}
+}
+
 func TestMarkReadUpdatesUnreadCount(t *testing.T) {
 	repository := newFakeRepository()
 	service := NewService(repository)
@@ -98,11 +138,14 @@ func TestMarkReadUpdatesUnreadCount(t *testing.T) {
 		{ID: notificationID, UserID: userID, Type: TypeTaskDone, Title: "Done", Message: "Done"},
 	}
 
-	result, err := service.MarkRead(context.Background(), notificationID, userID)
+	result, changed, err := service.MarkRead(context.Background(), notificationID, userID, false)
 	if err != nil {
 		t.Fatalf("mark read: %v", err)
 	}
 
+	if !changed {
+		t.Fatal("expected mark read to report changed")
+	}
 	if !result.Notification.IsRead {
 		t.Fatal("expected notification to be marked read")
 	}
@@ -114,6 +157,34 @@ func TestMarkReadUpdatesUnreadCount(t *testing.T) {
 	}
 }
 
+func TestMarkAllReadUpdatesUnreadCount(t *testing.T) {
+	repository := newFakeRepository()
+	service := NewService(repository)
+	userID := uuid.New()
+	otherUserID := uuid.New()
+
+	repository.notifications = []Notification{
+		{ID: uuid.New(), UserID: userID, Type: TypeTaskAssigned, Title: "A", Message: "A"},
+		{ID: uuid.New(), UserID: userID, Type: TypeTaskDone, Title: "B", Message: "B"},
+		{ID: uuid.New(), UserID: otherUserID, Type: TypeTaskAssigned, Title: "C", Message: "C"},
+	}
+
+	result, err := service.MarkAllRead(context.Background(), userID, false)
+	if err != nil {
+		t.Fatalf("mark all read: %v", err)
+	}
+
+	if result.ReadCount != 2 {
+		t.Fatalf("expected read count 2, got %d", result.ReadCount)
+	}
+	if result.UnreadCount != 0 {
+		t.Fatalf("expected unread count 0, got %d", result.UnreadCount)
+	}
+	if repository.notifications[2].IsRead {
+		t.Fatal("expected other user notification to remain unread")
+	}
+}
+
 type fakeRepository struct {
 	notifications []Notification
 }
@@ -122,10 +193,10 @@ func newFakeRepository() *fakeRepository {
 	return &fakeRepository{notifications: []Notification{}}
 }
 
-func (r *fakeRepository) CountUnread(_ context.Context, userID uuid.UUID) (int64, error) {
+func (r *fakeRepository) CountUnread(_ context.Context, userID uuid.UUID, includeAll bool) (int64, error) {
 	var count int64
 	for _, notification := range r.notifications {
-		if notification.UserID == userID && !notification.IsRead {
+		if (includeAll || notification.UserID == userID) && !notification.IsRead {
 			count++
 		}
 	}
@@ -138,9 +209,9 @@ func (r *fakeRepository) Create(_ context.Context, notification *Notification) e
 	return nil
 }
 
-func (r *fakeRepository) FindByIDForUser(_ context.Context, id uuid.UUID, userID uuid.UUID) (*Notification, error) {
+func (r *fakeRepository) FindByID(_ context.Context, id uuid.UUID, userID uuid.UUID, includeAll bool) (*Notification, error) {
 	for i := range r.notifications {
-		if r.notifications[i].ID == id && r.notifications[i].UserID == userID {
+		if r.notifications[i].ID == id && (includeAll || r.notifications[i].UserID == userID) {
 			return &r.notifications[i], nil
 		}
 	}
@@ -151,12 +222,24 @@ func (r *fakeRepository) FindByIDForUser(_ context.Context, id uuid.UUID, userID
 func (r *fakeRepository) List(_ context.Context, query ListQuery) ([]Notification, int64, error) {
 	result := make([]Notification, 0, len(r.notifications))
 	for _, notification := range r.notifications {
-		if notification.UserID == query.UserID {
+		if query.IncludeAll || notification.UserID == query.UserID {
 			result = append(result, notification)
 		}
 	}
 
 	return result, int64(len(result)), nil
+}
+
+func (r *fakeRepository) MarkAllRead(_ context.Context, userID uuid.UUID, includeAll bool) (int64, error) {
+	var count int64
+	for i := range r.notifications {
+		if (includeAll || r.notifications[i].UserID == userID) && !r.notifications[i].IsRead {
+			r.notifications[i].IsRead = true
+			count++
+		}
+	}
+
+	return count, nil
 }
 
 func (r *fakeRepository) Update(_ context.Context, notification *Notification) error {
