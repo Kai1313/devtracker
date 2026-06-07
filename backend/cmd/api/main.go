@@ -12,6 +12,7 @@ import (
 	"devtracker/backend/internal/config"
 	dashboardmodule "devtracker/backend/internal/dashboard"
 	"devtracker/backend/internal/database"
+	docsmodule "devtracker/backend/internal/docs"
 	kpimodule "devtracker/backend/internal/kpi"
 	appmiddleware "devtracker/backend/internal/middleware"
 	notificationmodule "devtracker/backend/internal/notification"
@@ -102,8 +103,13 @@ func main() {
 	app.Use(requestid.New())
 	app.Use(cors.New())
 	app.Use(appmiddleware.RequestLogger(log))
+	docsmodule.RegisterRoutes(app, cfg.App.BasePath)
 
 	api := app.Group(cfg.App.BasePath)
+	// @Summary Health check
+	// @Tags Health
+	// @Success 200 {object} response.Body
+	// @Router /health [get]
 	api.Get("/health", func(c *fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
 		defer cancel()
