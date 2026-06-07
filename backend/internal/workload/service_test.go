@@ -14,6 +14,8 @@ import (
 func TestDeveloperWorkloadAppliesFilters(t *testing.T) {
 	sprintID := uuid.New()
 	projectID := uuid.New()
+	developerID := uuid.New()
+	statusID := uuid.New()
 	repository := &fakeWorkloadRepository{}
 	service := NewService(
 		repository,
@@ -26,8 +28,12 @@ func TestDeveloperWorkloadAppliesFilters(t *testing.T) {
 	)
 
 	result, err := service.DeveloperWorkload(context.Background(), Query{
-		SprintID:  sprintID.String(),
-		ProjectID: projectID.String(),
+		SprintID:    sprintID.String(),
+		ProjectID:   projectID.String(),
+		DeveloperID: developerID.String(),
+		StatusID:    statusID.String(),
+		StartDate:   "2026-01-01",
+		EndDate:     "2026-01-31",
 	})
 	if err != nil {
 		t.Fatalf("developer workload: %v", err)
@@ -39,7 +45,19 @@ func TestDeveloperWorkloadAppliesFilters(t *testing.T) {
 	if repository.filter.ProjectID == nil || *repository.filter.ProjectID != projectID {
 		t.Fatalf("expected project filter %s, got %v", projectID, repository.filter.ProjectID)
 	}
-	if len(result) != 1 || result[0].WorkloadClassification != ClassificationHigh {
+	if repository.filter.DeveloperID == nil || *repository.filter.DeveloperID != developerID {
+		t.Fatalf("expected developer filter %s, got %v", developerID, repository.filter.DeveloperID)
+	}
+	if repository.filter.StatusID == nil || *repository.filter.StatusID != statusID {
+		t.Fatalf("expected status filter %s, got %v", statusID, repository.filter.StatusID)
+	}
+	if repository.filter.StartDate == nil || repository.filter.StartDate.Format(dateLayout) != "2026-01-01" {
+		t.Fatalf("expected start date filter, got %v", repository.filter.StartDate)
+	}
+	if repository.filter.EndDate == nil || repository.filter.EndDate.Format(dateLayout) != "2026-01-31" {
+		t.Fatalf("expected end date filter, got %v", repository.filter.EndDate)
+	}
+	if len(result) != 1 || result[0].WorkloadLevel != ClassificationHigh {
 		t.Fatalf("expected high workload result, got %+v", result)
 	}
 }
@@ -56,21 +74,66 @@ func TestDeveloperWorkloadRejectsInvalidSprint(t *testing.T) {
 	}
 }
 
+func TestDeveloperWorkloadScopeRestrictsDeveloper(t *testing.T) {
+	developerID := uuid.New()
+	otherDeveloperID := uuid.New()
+	repository := &fakeWorkloadRepository{}
+	service := NewService(
+		repository,
+		&fakeSprintRepository{},
+		&fakeProjectRepository{},
+	)
+
+	if _, err := service.DeveloperWorkloadWithScope(context.Background(), Query{
+		DeveloperID: otherDeveloperID.String(),
+	}, AccessScope{UserID: developerID, IsDeveloper: true}); err == nil {
+		t.Fatal("expected developer to be forbidden from other developer workload")
+	}
+
+	if _, err := service.DeveloperWorkloadWithScope(context.Background(), Query{}, AccessScope{
+		UserID:      developerID,
+		IsDeveloper: true,
+	}); err != nil {
+		t.Fatalf("expected own workload scope to be allowed: %v", err)
+	}
+
+	if repository.filter.DeveloperID == nil || *repository.filter.DeveloperID != developerID {
+		t.Fatalf("expected developer scope %s, got %v", developerID, repository.filter.DeveloperID)
+	}
+}
+
+func TestDeveloperWorkloadScopeRestrictsQAStatuses(t *testing.T) {
+	repository := &fakeWorkloadRepository{}
+	service := NewService(
+		repository,
+		&fakeSprintRepository{},
+		&fakeProjectRepository{},
+	)
+
+	if _, err := service.DeveloperWorkloadWithScope(context.Background(), Query{}, AccessScope{IsQA: true}); err != nil {
+		t.Fatalf("expected QA scope to be allowed: %v", err)
+	}
+
+	if !repository.filter.QAOnly {
+		t.Fatal("expected QA scope to apply QA-only filter")
+	}
+}
+
 func TestClassify(t *testing.T) {
 	tests := []struct {
-		name   string
-		points float64
-		want   string
+		name        string
+		activeTasks int64
+		want        string
 	}{
-		{name: "low", points: 4.99, want: ClassificationLow},
-		{name: "normal", points: 5, want: ClassificationNormal},
-		{name: "high", points: 13.5, want: ClassificationHigh},
-		{name: "overloaded", points: 20.5, want: ClassificationOverloaded},
+		{name: "low", activeTasks: 3, want: ClassificationLow},
+		{name: "normal", activeTasks: 4, want: ClassificationNormal},
+		{name: "high", activeTasks: 8, want: ClassificationHigh},
+		{name: "overloaded", activeTasks: 11, want: ClassificationOverloaded},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := classify(tt.points); got != tt.want {
+			if got := classify(tt.activeTasks); got != tt.want {
 				t.Fatalf("expected %s, got %s", tt.want, got)
 			}
 		})
@@ -85,13 +148,16 @@ func (r *fakeWorkloadRepository) DeveloperWorkload(_ context.Context, filter fil
 	r.filter = filter
 	return []DeveloperWorkloadResponse{
 		{
-			DeveloperID:            uuid.New(),
-			DeveloperName:          "Dev User",
-			ActiveTasks:            3,
-			TotalPoints:            14,
-			OverdueTasks:           1,
-			CurrentSprintTasks:     2,
-			WorkloadClassification: classify(14),
+			DeveloperID:          uuid.New(),
+			DeveloperName:        "Dev User",
+			ActiveTasks:          8,
+			DoneTasks:            3,
+			OverdueTasks:         1,
+			TotalEstimatedPoints: 14,
+			TotalActualPoints:    10,
+			CurrentSprintTasks:   2,
+			WorkloadScore:        8,
+			WorkloadLevel:        classify(8),
 		},
 	}, nil
 }

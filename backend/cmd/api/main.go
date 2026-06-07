@@ -89,7 +89,7 @@ func main() {
 	kpiHandler := kpimodule.NewHandler(kpiService, auditService)
 	auditHandler := auditmodule.NewHandler(auditService)
 	notificationHandler := notificationmodule.NewHandler(notificationService, auditService)
-	workloadHandler := workloadmodule.NewHandler(workloadService)
+	workloadHandler := workloadmodule.NewHandler(workloadService, auditService)
 
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.App.Name,
@@ -136,7 +136,7 @@ func main() {
 	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware, appmiddleware.RequirePermission, appmiddleware.RequireRole)
 	auditmodule.RegisterRoutes(api, auditHandler, authMiddleware, appmiddleware.RequireRole("admin", "project_manager"))
 	notificationmodule.RegisterRoutes(api, notificationHandler, authMiddleware, appmiddleware.RequireRole)
-	workloadmodule.RegisterRoutes(api, workloadHandler, authMiddleware, appmiddleware.RequirePermission)
+	workloadmodule.RegisterRoutes(api, workloadHandler, authMiddleware, appmiddleware.RequireRole)
 
 	serverErr := make(chan error, 1)
 	go func() {

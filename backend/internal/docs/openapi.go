@@ -283,9 +283,13 @@ func paths() map[string]any {
 			}),
 		},
 		"/workload": map[string]any{
-			"get": operation([]string{"Workload"}, "Developer workload", "Returns active workload per developer. Requires `view_kpi` or `manage_tasks` permission.", true, []any{
-				queryParam("sprint", "string", "Optional sprint UUID. Alias: sprint_id", idExample()),
-				queryParam("project", "string", "Optional project UUID. Alias: project_id", idExample()),
+			"get": operation([]string{"Workload"}, "Developer workload", "Returns workload per developer. Admin, Project Manager, and Management can view all; Developer can view own workload; QA sees QA-status task workload.", true, []any{
+				queryParam("sprint_id", "string", "Optional sprint UUID. Alias: sprint", idExample()),
+				queryParam("project_id", "string", "Optional project UUID. Alias: project", idExample()),
+				queryParam("developer_id", "string", "Optional developer UUID", idExample()),
+				queryParam("status_id", "string", "Optional task status UUID", idExample()),
+				queryParam("start_date", "string", "Optional task start date from YYYY-MM-DD", "2026-01-01"),
+				queryParam("end_date", "string", "Optional task due date through YYYY-MM-DD", "2026-01-31"),
 			}, nil, map[string]any{
 				"200": response("developer workload retrieved", arrayOf(ref("DeveloperWorkload")), example("developer workload retrieved", []any{workloadExample()})),
 			}),
@@ -386,7 +390,7 @@ func schemas() map[string]any {
 		"NotificationRead":        object(nil, props("notification", ref("Notification"), "unread_count", integer())),
 		"NotificationUnreadCount": object(nil, props("unread_count", integer())),
 		"NotificationReadAll":     object(nil, props("read_count", integer(), "unread_count", integer())),
-		"DeveloperWorkload":       object(nil, props("developer_id", uuidSchema(), "developer_name", str(), "active_tasks", integer(), "total_points", number(), "overdue_tasks", integer(), "current_sprint_tasks", integer(), "workload_classification", map[string]any{"type": "string", "enum": []any{"LOW", "NORMAL", "HIGH", "OVERLOADED"}})),
+		"DeveloperWorkload":       object(nil, props("developer_id", uuidSchema(), "developer_name", str(), "active_tasks", integer(), "done_tasks", integer(), "overdue_tasks", integer(), "total_estimated_points", number(), "total_actual_points", number(), "current_sprint_tasks", integer(), "workload_score", integer(), "workload_level", map[string]any{"type": "string", "enum": []any{"LOW", "NORMAL", "HIGH", "OVERLOADED"}})),
 	}
 }
 
@@ -662,5 +666,5 @@ func notificationReadExample() map[string]any {
 }
 
 func workloadExample() map[string]any {
-	return map[string]any{"developer_id": idExample(), "developer_name": "Dev User", "active_tasks": 5, "total_points": 18, "overdue_tasks": 1, "current_sprint_tasks": 4, "workload_classification": "HIGH"}
+	return map[string]any{"developer_id": idExample(), "developer_name": "Dev User", "active_tasks": 8, "done_tasks": 4, "overdue_tasks": 1, "total_estimated_points": 18, "total_actual_points": 13, "current_sprint_tasks": 6, "workload_score": 8, "workload_level": "HIGH"}
 }
