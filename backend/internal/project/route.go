@@ -2,8 +2,8 @@ package project
 
 import "github.com/gofiber/fiber/v2"
 
-func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.Handler) {
-	group := router.Group("/projects", authMiddleware)
+func RegisterRoutes(router fiber.Router, handler *Handler, authMiddleware fiber.Handler, requirePermission func(...string) fiber.Handler) {
+	group := router.Group("/projects", authMiddleware, requirePermission("manage_projects"))
 
 	group.Get("/", handler.List)
 	group.Get("/:id", handler.Get)

@@ -8,8 +8,17 @@ import (
 )
 
 type Role struct {
+	ID          uuid.UUID    `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name        string       `gorm:"size:50;uniqueIndex;not null"`
+	Description string       `gorm:"type:text"`
+	Permissions []Permission `gorm:"many2many:role_permissions;"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type Permission struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	Name        string    `gorm:"size:50;uniqueIndex;not null"`
+	Name        string    `gorm:"size:100;uniqueIndex;not null"`
 	Description string    `gorm:"type:text"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -19,6 +28,7 @@ type User struct {
 	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	RoleID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	Role         Role      `gorm:"foreignKey:RoleID"`
+	Roles        []Role    `gorm:"many2many:user_roles;"`
 	Name         string    `gorm:"size:150;not null"`
 	Email        string    `gorm:"size:150;uniqueIndex;not null"`
 	PasswordHash string    `gorm:"type:text;not null"`
@@ -33,6 +43,14 @@ type User struct {
 func (r *Role) BeforeCreate(_ *gorm.DB) error {
 	if r.ID == uuid.Nil {
 		r.ID = uuid.New()
+	}
+
+	return nil
+}
+
+func (p *Permission) BeforeCreate(_ *gorm.DB) error {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
 	}
 
 	return nil

@@ -107,16 +107,15 @@ func main() {
 	})
 
 	authMiddleware := appmiddleware.JWTAuth(cfg.JWT, userRepository)
-	adminOnly := appmiddleware.RequireRoles("admin")
 
 	auth.RegisterRoutes(api, authHandler, authMiddleware)
-	usermodule.RegisterRoutes(api, userHandler, authMiddleware, adminOnly)
-	projectmodule.RegisterRoutes(api, projectHandler, authMiddleware)
-	sprintmodule.RegisterRoutes(api, sprintHandler, authMiddleware)
-	statusmodule.RegisterRoutes(api, statusHandler, authMiddleware)
-	taskmodule.RegisterRoutes(api, taskHandler, authMiddleware)
-	dashboardmodule.RegisterRoutes(api, dashboardHandler, authMiddleware)
-	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware)
+	usermodule.RegisterRoutes(api, userHandler, authMiddleware, appmiddleware.RequirePermission)
+	projectmodule.RegisterRoutes(api, projectHandler, authMiddleware, appmiddleware.RequirePermission)
+	sprintmodule.RegisterRoutes(api, sprintHandler, authMiddleware, appmiddleware.RequirePermission)
+	statusmodule.RegisterRoutes(api, statusHandler, authMiddleware, appmiddleware.RequirePermission)
+	taskmodule.RegisterRoutes(api, taskHandler, authMiddleware, appmiddleware.RequirePermission)
+	dashboardmodule.RegisterRoutes(api, dashboardHandler, authMiddleware, appmiddleware.RequirePermission)
+	kpimodule.RegisterRoutes(api, kpiHandler, authMiddleware, appmiddleware.RequirePermission)
 
 	serverErr := make(chan error, 1)
 	go func() {

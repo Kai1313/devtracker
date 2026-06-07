@@ -43,11 +43,23 @@ func (r *repository) CountAll(ctx context.Context) (int64, error) {
 }
 
 func (r *repository) Create(ctx context.Context, user *User) error {
-	return r.db.WithContext(ctx).Create(user).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("Role", "Roles", "Role.Permissions").Create(user).Error; err != nil {
+			return err
+		}
+
+		return syncPrimaryUserRole(tx, user.ID, user.RoleID)
+	})
 }
 
 func (r *repository) Update(ctx context.Context, user *User) error {
-	return r.db.WithContext(ctx).Save(user).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("Role", "Roles", "Role.Permissions").Save(user).Error; err != nil {
+			return err
+		}
+
+		return syncPrimaryUserRole(tx, user.ID, user.RoleID)
+	})
 }
 
 func (r *repository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -57,7 +69,8 @@ func (r *repository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *repository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
 	err := r.db.WithContext(ctx).
-		Preload("Role").
+		Preload("Role.Permissions").
+		Preload("Roles.Permissions").
 		First(&user, "id = ?", id).
 		Error
 
@@ -67,7 +80,8 @@ func (r *repository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) 
 func (r *repository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 	err := r.db.WithContext(ctx).
-		Preload("Role").
+		Preload("Role.Permissions").
+		Preload("Roles.Permissions").
 		First(&user, "LOWER(email) = ?", strings.ToLower(email)).
 		Error
 
@@ -78,7 +92,8 @@ func (r *repository) FindByEmailIncludingDeleted(ctx context.Context, email stri
 	var user User
 	err := r.db.WithContext(ctx).
 		Unscoped().
-		Preload("Role").
+		Preload("Role.Permissions").
+		Preload("Roles.Permissions").
 		First(&user, "LOWER(email) = ?", strings.ToLower(email)).
 		Error
 
@@ -87,14 +102,20 @@ func (r *repository) FindByEmailIncludingDeleted(ctx context.Context, email stri
 
 func (r *repository) FindRoleByID(ctx context.Context, id uuid.UUID) (*Role, error) {
 	var role Role
-	err := r.db.WithContext(ctx).First(&role, "id = ?", id).Error
+	err := r.db.WithContext(ctx).
+		Preload("Permissions").
+		First(&role, "id = ?", id).
+		Error
 
 	return &role, err
 }
 
 func (r *repository) FindRoleByName(ctx context.Context, name string) (*Role, error) {
 	var role Role
-	err := r.db.WithContext(ctx).First(&role, "LOWER(name) = ?", strings.ToLower(name)).Error
+	err := r.db.WithContext(ctx).
+		Preload("Permissions").
+		First(&role, "LOWER(name) = ?", strings.ToLower(name)).
+		Error
 
 	return &role, err
 }
@@ -130,4 +151,16 @@ func (r *repository) List(ctx context.Context, filter ListUsersQuery) ([]User, i
 		Error
 
 	return users, total, err
+}
+
+func syncPrimaryUserRole(tx *gorm.DB, userID, roleID uuid.UUID) error {
+	if err := tx.Exec("DELETE FROM user_roles WHERE user_id = ?", userID).Error; err != nil {
+		return err
+	}
+
+	return tx.Exec(
+		"INSERT INTO user_roles (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+		userID,
+		roleID,
+	).Error
 }

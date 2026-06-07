@@ -22,6 +22,28 @@ CREATE TABLE users (
     deleted_at TIMESTAMP NULL
 );
 
+CREATE TABLE permissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE role_permissions (
+    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (role_id, permission_id)
+);
+
+CREATE TABLE user_roles (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, role_id)
+);
+
 CREATE TABLE projects (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_code VARCHAR(50) NOT NULL UNIQUE,
@@ -133,6 +155,8 @@ CREATE TABLE kpi_snapshots (
 
 CREATE INDEX idx_users_role_id ON users(role_id);
 CREATE INDEX idx_users_deleted_at ON users(deleted_at);
+CREATE INDEX idx_role_permissions_permission_id ON role_permissions(permission_id);
+CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 CREATE INDEX idx_task_statuses_is_active ON task_statuses(is_active);
 CREATE INDEX idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX idx_tasks_sprint_id ON tasks(sprint_id);
@@ -147,6 +171,64 @@ INSERT INTO roles (name, description) VALUES
 ('developer', 'Developer'),
 ('qa', 'Quality assurance'),
 ('management', 'Management viewer');
+
+INSERT INTO permissions (name, description) VALUES
+('manage_users', 'Manage user accounts and role assignments'),
+('manage_projects', 'Create, update, and delete projects'),
+('manage_sprints', 'Create, update, close, and delete sprints'),
+('manage_tasks', 'Create, update, and delete tasks'),
+('manage_task_statuses', 'Create, update, and delete task statuses'),
+('view_assigned_tasks', 'View assigned tasks'),
+('update_own_task_status', 'Update own task status'),
+('update_qa_status', 'Update QA task status'),
+('view_dashboard', 'View dashboard summaries'),
+('view_kpi', 'View KPI dashboards'),
+('view_reports', 'View reports');
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT roles.id, permissions.id
+FROM roles
+CROSS JOIN permissions
+WHERE roles.name = 'admin';
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT roles.id, permissions.id
+FROM roles
+JOIN permissions ON permissions.name IN (
+    'manage_projects',
+    'manage_sprints',
+    'manage_tasks',
+    'view_kpi'
+)
+WHERE roles.name = 'project_manager';
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT roles.id, permissions.id
+FROM roles
+JOIN permissions ON permissions.name IN (
+    'view_assigned_tasks',
+    'update_own_task_status'
+)
+WHERE roles.name = 'developer';
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT roles.id, permissions.id
+FROM roles
+JOIN permissions ON permissions.name IN (
+    'view_assigned_tasks',
+    'update_qa_status'
+)
+WHERE roles.name = 'qa';
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT roles.id, permissions.id
+FROM roles
+JOIN permissions ON permissions.name IN (
+    'view_dashboard',
+    'view_kpi',
+    'view_reports'
+)
+WHERE roles.name = 'management';
 
 INSERT INTO task_statuses (status_name, color_name, color_hex, status_order, is_done, is_qa_status, is_active) VALUES
 ('Todo', 'gray', '#6B7280', 1, false, false, true),
