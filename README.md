@@ -88,3 +88,42 @@ Or build through Compose:
 ```bash
 docker compose build app
 ```
+
+## CI Pipeline
+
+GitHub Actions runs the backend pipeline from `.github/workflows/backend-ci.yml` on pushes and pull requests that touch backend or deployment files.
+
+The pipeline checks:
+
+- Repository checkout
+- Go 1.25 setup
+- Dependency download with `go mod download`
+- Go formatting with `gofmt -l`
+- Static checks with `go vet ./...`
+- Tests with `go test ./...`
+- Backend binary build
+- Docker image build check
+
+CI environment variables:
+
+```text
+GO_VERSION=1.25.0
+CGO_ENABLED=0
+APP_ENV=test
+APP_PORT=8080
+APP_BASE_PATH=/api
+DB_RUN_MIGRATIONS=false
+JWT_SECRET=ci-test-secret-change-me
+JWT_ISSUER=devtracker-ci
+JWT_ACCESS_TOKEN_TTL=24h
+```
+
+The current unit test suite does not require external database or Redis services. Add CI secrets or service containers later if integration tests need live infrastructure.
+
+Recommended branch protection:
+
+- Protect `main`.
+- Require pull requests before merging.
+- Require the `Backend checks` status check to pass.
+- Require branches to be up to date before merging.
+- Restrict direct pushes to release maintainers.
